@@ -75,8 +75,8 @@ def add_user_route():
 def parse_book(result):
     print(result)
     json_dict = result['b']
-    json_dict['id'] = result['b_id']
-    json_dict['author'] = result['a']
+    # json_dict['id'] = result['b_id']
+    json_dict['authors'] = result['authors']
     # json_dict['author']["name"] = result['a']["name"]
     # json_dict['author']["surname"] = result['a']["surname"]
     # json_dict['author']["born"] = Date(result['a']["born"])
@@ -99,7 +99,7 @@ def get_books(tx, query):
 
 def get_books_route():
     with driver.session() as session:
-        query = "MATCH (b:Book)--(a:Author) RETURN b, ID(b) as b_id, a{.*, born: toString(a.born)}, ID(a)as a_id"
+        query = "MATCH (b:Book)--(a:Author) RETURN b, collect(a{.*, born: toString(a.born)}) as authors"
         books = session.execute_read(get_books, query)
 
     response = {'books': books}

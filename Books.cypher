@@ -177,3 +177,20 @@ CREATE
 (AKańtoch)<-[:WRITTEN_BY]-(ZabawkiD)-[:RELEASED_BY {release_date:date("2006-03-27")}]->(powergraph),
 (ZabawkiD)-[:RELEASED_BY {release_date:date("2009-10-30")}]->(FabrykaS),
 (AKańtoch)<-[:WRITTEN_BY]-(TAanioł)-[:RELEASED_BY {release_date:date("2007-01-01")}]->(FabrykaS)
+
+
+CREATE (Albatros:Publishing_House {name:"Albatros"})
+CREATE (JoeHill:Author {name:'Joe', surname:'Hill', born:date("1972-06-04")})
+CREATE (StephenKing:Author {name:'Stephen', surname:'King', born:date("1947-09-21")})
+
+CREATE (WWysTr:Book{
+    title:"W wysokiej trawie",
+    cover_photo:"https://s.lubimyczytac.pl/upload/books/179000/179700/146997-352x500.jpg", 
+    description:"Cal i Becky to kochające się rodzeństwo. Kiedy Becky zachodzi w ciążę na pierwszym roku studiów, brat decyduje się jej pomóc i odwieźć siostrę do rodziny w drugiej części Stanów.
+Przejeżdżając przez Kansas słyszą wołanie o pomoc, które dobiega z przylegającego do szosy wielkiego pola traw. Zatrzymują się na parkingu przy kościele pod dziwnym wezwaniem „Czarnego Kamienia Odkupiciela”. W pobliżu nie ma nikogo, a dziecinny głos dobiega z niedaleka, więc decydują się wejść w trawy i wyprowadzić dziecko na bezpieczną drogę.
+Jednakże pole zakłóca poczucie kierunku, powodując, że Becky i Cal gubią się w trawie. Spotkanie z ludźmi w niej żyjącymi będzie dla nich zabójcze.", 
+    genres:["horror"]})
+
+CREATE
+(JoeHill)<-[:WRITTEN_BY]-(WWysTr)-[:RELEASED_BY {release_date:date("2013-05-01")}]->(Albatros),
+(StephenKing)<-[:WRITTEN_BY]-(WWysTr)
