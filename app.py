@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request, json
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
 import os #provides ways to access the Operating System and allows us to read the environment variables
+import bcrypt
 
 load_dotenv()
 
@@ -15,7 +16,8 @@ driver = GraphDatabase.driver(uri, auth=(user, password),database="neo4j")
 
 def parse_person(result):
     print(result)
-    json_dict = result['u']
+    json_dict = {}
+    json_dict['login']= result['u']['login']
     json_dict['id'] = result['id']
 
     return json_dict
@@ -42,15 +44,17 @@ def get_users_route():
     return jsonify(response)
 
 
-def add_user(tx, login):
+def add_user(tx, login, password):
     query = "MATCH (u:User) WHERE u.login=$login  RETURN u"
     result = tx.run(query, login=login).data()
     if result:
         response = {'message': 'User already exists'}
         return jsonify(response), 404
     else:
-        query = "CREATE (u:User {login: $login}) RETURN u, ID(u) as id"
-        result = tx.run(query, login=login).data()
+        query = "CREATE (u:User {login: $login, password:$password}) RETURN u, ID(u) as id"
+        passw = bcrypt.hashpw(password, bcrypt.gensalt()).decode('ascii')
+        print(passw)
+        result = tx.run(query, login=login, password = passw).data()
         return parse_person(result[0])
         
 
@@ -59,10 +63,14 @@ def add_user_route():
     if "login" not in json_dict:
         response = {'message': 'Login not provided'}
         return jsonify(response), 404
-    
+    if "password" not in json_dict:
+        response = {'message': 'Password not provided'}
+        return jsonify(response), 404
     login = request.json['login']
+    password = request.json['password'].encode('ascii')
     with driver.session() as session:
-        return session.execute_write(add_user, login)
+        return session.execute_write(add_user, login, password)
+
 
 
 
