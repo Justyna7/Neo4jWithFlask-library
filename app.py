@@ -72,6 +72,41 @@ def add_user_route():
         return session.execute_write(add_user, login, password)
 
 
+def parse_book(result):
+    print(result)
+    json_dict = result['b']
+    json_dict['id'] = result['b_id']
+    json_dict['author'] = result['a']
+    # json_dict['author']["name"] = result['a']["name"]
+    # json_dict['author']["surname"] = result['a']["surname"]
+    # json_dict['author']["born"] = Date(result['a']["born"])
+    # json_dict['author']['id'] = result['a_id']
+    return json_dict
+
+
+@app.route('/books', methods=['GET', 'POST'])
+def handle_books_route():
+    # if request.method == 'POST':
+    #     return add_book_route()
+    # else:
+        return get_books_route()
+
+
+def get_books(tx, query):
+    results = tx.run(query).data()
+    books = [parse_book(result) for result in results]
+    return books
+
+def get_books_route():
+    with driver.session() as session:
+        query = "MATCH (b:Book)--(a:Author) RETURN b, ID(b) as b_id, a{.*, born: toString(a.born)}, ID(a)as a_id"
+        books = session.execute_read(get_books, query)
+
+    response = {'books': books}
+    return jsonify(response)
+
+
+        
 
 
 
