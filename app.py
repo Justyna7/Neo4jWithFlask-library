@@ -77,6 +77,9 @@ def parse_book(result):
     json_dict = result['b']
     # json_dict['id'] = result['b_id']
     json_dict['authors'] = result['authors']
+    json_dict['published'] = result['published']
+    # json_dict['published']['publishing house'] = result['p']["name"]
+    # json_dict['published']['release date'] = result['r']
     # json_dict['author']["name"] = result['a']["name"]
     # json_dict['author']["surname"] = result['a']["surname"]
     # json_dict['author']["born"] = Date(result['a']["born"])
@@ -99,7 +102,7 @@ def get_books(tx, query):
 
 def get_books_route():
     with driver.session() as session:
-        query = "MATCH (b:Book)--(a:Author) RETURN b, collect(a{.*, born: toString(a.born)}) as authors"
+        query = 'MATCH (p:Publishing_House)-[r]-(b:Book)--(a:Author) RETURN b, collect(distinct(a{.*, born: toString(a.born)})) as authors, collect(distinct(p{publishing_house:p.name, release_date:toString(r.release_date) })) as published'
         books = session.execute_read(get_books, query)
 
     response = {'books': books}
