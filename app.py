@@ -110,7 +110,7 @@ def parse_comment(result):
     json_dict['author'] = result['login']
     return json_dict
 
-def add_comment(tx, login, password, comment, book):
+def add_comment(tx, login, password, comment, book_id):
     query = "MATCH (u:User) WHERE u.login=$login RETURN u, ID(u) as id"
     user = tx.run(query, login=login).data()
     if not user:
@@ -120,14 +120,14 @@ def add_comment(tx, login, password, comment, book):
         response = {'message': "Wrong password"}
         return jsonify(response), 401
     query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
-    book = tx.run(query, book=book).data()
+    book = tx.run(query, book=book_id).data()
     if not book:
         response = {'message': "Book doesn't exists"}
         return jsonify(response), 404
     #return parse_person(result[0])
     else:
         query = "MATCH (u:User {login: $login}), (b:Book) WHERE ID(b)=$book CREATE (u)-[c:COMMENTED_ON {comment:$comment}]->(b) RETURN c.comment as comment, ID(c) as id, u.login as login"
-        result = tx.run(query, login=login, book=book, comment=comment).data()
+        result = tx.run(query, login=login, book=book_id, comment=comment).data()
         return parse_comment(result[0])
 
 def add_annonymus_comment(tx, comment, book_id):
@@ -173,6 +173,76 @@ def add_comment_route():
             return session.execute_write(add_annonymus_comment, comment, book)
         
 
+def parse_rating(result):
+    print(result)
+    json_dict = {}
+    json_dict["rating"]= result['rating']
+    # json_dict 
+    json_dict['id']= result['id']
+    json_dict['author'] = result['login']
+    return json_dict
+
+def add_rating(tx, login, password, rating, book_id):
+    query = "MATCH (u:User) WHERE u.login=$login RETURN u, ID(u) as id"
+    user = tx.run(query, login=login).data()
+    if not user:
+        response = {'message': "User doesn't exists"}
+        return jsonify(response), 404
+    if not bcrypt.checkpw(password, user[0]['u']['password'].encode('ascii')):
+        response = {'message': "Wrong password"}
+        return jsonify(response), 401
+    query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
+    book = tx.run(query, book=book_id).data()
+    if not book:
+        response = {'message': "Book doesn't exists"}
+        return jsonify(response), 404
+    #return parse_person(result[0])
+    else:
+        query = "MATCH (u:User {login: $login}), (b:Book) WHERE ID(b)=$book CREATE (u)-[r:RATED {rating:$rating}]->(b) RETURN r.rating as rating, ID(r) as id, u.login as login"
+        result = tx.run(query, login=login, book=book_id, rating=rating).data()
+        return parse_rating(result[0])
+
+def add_annonymus_rating(tx, rating, book_id):
+    query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
+    book = tx.run(query, book=book_id).data()
+    if not book:
+        response = {'message': "Book doesn't exists"}
+        return jsonify(response), 404
+    else:
+        #print("dxfcghjkmll", book_id, type(book_id), rating, type(rating))
+        query = "MATCH (b:Book) WHERE ID(b)=$book WITH b MATCH (a:Anonymus) CREATE (a)-[r:RATED {rating:$rating}]->(b) RETURN r.rating as rating, ID(r) as id, 'Anonymus rating' as login" 
+        result = tx.run(query, book=book_id, rating=rating).data()
+        #print(result)
+        return parse_rating(result[0])
+        
+@app.route('/rating', methods=['GET', 'POST'])
+def handle_ratings_route():
+    if request.method == 'POST':
+        return add_rating_route()
+    # else:
+    #     return get_comment_route()
+
+def add_rating_route():
+    json_dict = request.get_json(force=True)
+    if "book" not in json_dict:
+        response = {'message': 'Book not provided'}
+        return jsonify(response), 404
+    if "rating" not in json_dict:
+        response = {'message': 'Rating not provided'}
+        return jsonify(response), 404
+    if "login" in json_dict and "password" not in json_dict:
+        response = {'message': 'Password not provided'}
+        return jsonify(response), 404
+    rating = request.json['rating']
+    book = request.json['book']
+    if "password" in json_dict and "login" in json_dict:
+        login = request.json['login']
+        password = request.json['password'].encode('ascii')
+        with driver.session() as session:
+            return session.execute_write(add_rating, login, password, rating, book)
+    else:
+        with driver.session() as session:
+            return session.execute_write(add_annonymus_rating, rating, book)
 
 
 if __name__ == '__main__':
