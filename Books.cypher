@@ -194,3 +194,5 @@ Jednakże pole zakłóca poczucie kierunku, powodując, że Becky i Cal gubią s
 CREATE
 (JoeHill)<-[:WRITTEN_BY]-(WWysTr)-[:RELEASED_BY {release_date:date("2013-05-01")}]->(Albatros),
 (StephenKing)<-[:WRITTEN_BY]-(WWysTr)
+
+CREATE(:Anonymus)

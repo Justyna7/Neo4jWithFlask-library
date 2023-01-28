@@ -75,15 +75,8 @@ def add_user_route():
 def parse_book(result):
     print(result)
     json_dict = result['b']
-    # json_dict['id'] = result['b_id']
     json_dict['authors'] = result['authors']
     json_dict['published'] = result['published']
-    # json_dict['published']['publishing house'] = result['p']["name"]
-    # json_dict['published']['release date'] = result['r']
-    # json_dict['author']["name"] = result['a']["name"]
-    # json_dict['author']["surname"] = result['a']["surname"]
-    # json_dict['author']["born"] = Date(result['a']["born"])
-    # json_dict['author']['id'] = result['a_id']
     return json_dict
 
 
@@ -108,7 +101,76 @@ def get_books_route():
     response = {'books': books}
     return jsonify(response)
 
+def parse_comment(result):
+    print(result)
+    json_dict = {}
+    json_dict["comment"]= result['comment']
+    # json_dict 
+    json_dict['id']= result['id']
+    json_dict['author'] = result['login']
+    return json_dict
 
+def add_comment(tx, login, password, comment, book):
+    query = "MATCH (u:User) WHERE u.login=$login RETURN u, ID(u) as id"
+    user = tx.run(query, login=login).data()
+    if not user:
+        response = {'message': "User doesn't exists"}
+        return jsonify(response), 404
+    if not bcrypt.checkpw(password, user[0]['u']['password'].encode('ascii')):
+        response = {'message': "Wrong password"}
+        return jsonify(response), 401
+    query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
+    book = tx.run(query, book=book).data()
+    if not book:
+        response = {'message': "Book doesn't exists"}
+        return jsonify(response), 404
+    #return parse_person(result[0])
+    else:
+        query = "MATCH (u:User {login: $login}), (b:Book) WHERE ID(b)=$book CREATE (u)-[c:COMMENTED_ON {comment:$comment}]->(b) RETURN c.comment as comment, ID(c) as id, u.login as login"
+        result = tx.run(query, login=login, book=book, comment=comment).data()
+        return parse_comment(result[0])
+
+def add_annonymus_comment(tx, comment, book_id):
+    query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
+    book = tx.run(query, book=book_id).data()
+    if not book:
+        response = {'message': "Book doesn't exists"}
+        return jsonify(response), 404
+    else:
+        print("dxfcghjkmll", book_id, type(book_id), comment, type(comment))
+        query = "MATCH (b:Book) WHERE ID(b)=$book WITH b MATCH (a:Anonymus) CREATE (a)-[c:COMMENTED_ON {comment:$comment}]->(b) RETURN c.comment as comment, ID(c) as id, 'Anonymus comment' as login" 
+        result = tx.run(query, book=book_id, comment=comment).data()
+        print(result)
+        return parse_comment(result[0])
+        
+@app.route('/comment', methods=['GET', 'POST'])
+def handle_comments_route():
+    if request.method == 'POST':
+        return add_comment_route()
+    # else:
+    #     return get_comment_route()
+
+def add_comment_route():
+    json_dict = request.get_json(force=True)
+    if "book" not in json_dict:
+        response = {'message': 'Book not provided'}
+        return jsonify(response), 404
+    if "comment" not in json_dict:
+        response = {'message': 'Comment not provided'}
+        return jsonify(response), 404
+    if "login" in json_dict and "password" not in json_dict:
+        response = {'message': 'Password not provided'}
+        return jsonify(response), 404
+    comment = request.json['comment']
+    book = request.json['book']
+    if "password" in json_dict and "login" in json_dict:
+        login = request.json['login']
+        password = request.json['password'].encode('ascii')
+        with driver.session() as session:
+            return session.execute_write(add_comment, login, password, comment, book)
+    else:
+        with driver.session() as session:
+            return session.execute_write(add_annonymus_comment, comment, book)
         
 
 
