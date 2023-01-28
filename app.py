@@ -19,6 +19,17 @@ def error_message(json_dict, values):
             response = {'message': x + ' not provided'}
             return jsonify(response), 404
 
+def check_credentials(tx, login, password):
+    query = "MATCH (u:User) WHERE u.login=$login RETURN u, ID(u) as id"
+    user = tx.run(query, login=login).data()
+    if not user:
+        response = {'message': "User doesn't exists"}
+        return jsonify(response), 404
+    if not bcrypt.checkpw(password, user[0]['u']['password'].encode('ascii')):
+        response = {'message': "Wrong password"}
+        return jsonify(response), 401
+
+
 def parse_person(result):
     print(result)
     json_dict = {}
@@ -98,14 +109,9 @@ def get_books_route():
 
 
 def add_comment(tx, login, password, comment, book_id):
-    query = "MATCH (u:User) WHERE u.login=$login RETURN u, ID(u) as id"
-    user = tx.run(query, login=login).data()
-    if not user:
-        response = {'message': "User doesn't exists"}
-        return jsonify(response), 404
-    if not bcrypt.checkpw(password, user[0]['u']['password'].encode('ascii')):
-        response = {'message': "Wrong password"}
-        return jsonify(response), 401
+    err = check_credentials(tx, login, password)
+    if err:
+        return err
     query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
     book = tx.run(query, book=book_id).data()
     if not book:
@@ -156,14 +162,9 @@ def add_comment_route(id):
         
 
 def add_rating(tx, login, password, rating, book_id):
-    query = "MATCH (u:User) WHERE u.login=$login RETURN u, ID(u) as id"
-    user = tx.run(query, login=login).data()
-    if not user:
-        response = {'message': "User doesn't exists"}
-        return jsonify(response), 404
-    if not bcrypt.checkpw(password, user[0]['u']['password'].encode('ascii')):
-        response = {'message': "Wrong password"}
-        return jsonify(response), 401
+    err = check_credentials(tx, login, password)
+    if err:
+        return err
     query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
     book = tx.run(query, book=book_id).data()
     if not book:
