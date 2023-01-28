@@ -11,7 +11,6 @@ app = Flask(__name__)
 uri = os.getenv('URI')
 user = os.getenv("NEO4J_USERNAME")
 password = os.getenv("PASSWORD")
-#print(uri, user, password)
 driver = GraphDatabase.driver(uri, auth=(user, password),database="neo4j")
 
 def error_message(json_dict, values):
@@ -25,7 +24,6 @@ def parse_person(result):
     json_dict = {}
     json_dict['login']= result['u']['login']
     json_dict['id'] = result['id']
-
     return json_dict
 
 @app.route('/users', methods=['GET', 'POST'])
@@ -34,7 +32,6 @@ def handle_users_route():
         return add_user_route()
     else:
         return get_users_route()
-
 
 def get_users(tx, query):
     results = tx.run(query).data()
@@ -47,7 +44,6 @@ def get_users_route():
         users = session.execute_read(get_users, query)
     response = {'users': users}
     return jsonify(response)
-
 
 def add_user(tx, login, password):
     query = "MATCH (u:User) WHERE u.login=$login  RETURN u"
@@ -62,18 +58,10 @@ def add_user(tx, login, password):
         result = tx.run(query, login=login, password = passw).data()
         return parse_person(result[0])
         
-
 def add_user_route():
-    json_dict = request.get_json(force=True)
-    err = error_message(json_dict, ["login","password"])
+    err = error_message(request.get_json(force=True), ["login","password"])
     if err:
         return err
-    if "login" not in json_dict:
-        response = {'message': 'Login not provided'}
-        return jsonify(response), 404
-    if "password" not in json_dict:
-        response = {'message': 'Password not provided'}
-        return jsonify(response), 404
     login = request.json['login']
     password = request.json['password'].encode('ascii')
     with driver.session() as session:
@@ -108,14 +96,6 @@ def get_books_route():
     response = {'books': books}
     return jsonify(response)
 
-def parse_comment(result):
-    print(result)
-    json_dict = {}
-    json_dict["comment"]= result['comment']
-    # json_dict 
-    json_dict['id']= result['id']
-    json_dict['author'] = result['login']
-    return json_dict
 
 def add_comment(tx, login, password, comment, book_id):
     query = "MATCH (u:User) WHERE u.login=$login RETURN u, ID(u) as id"
@@ -131,11 +111,10 @@ def add_comment(tx, login, password, comment, book_id):
     if not book:
         response = {'message': "Book doesn't exists"}
         return jsonify(response), 404
-    #return parse_person(result[0])
     else:
         query = "MATCH (u:User {login: $login}), (b:Book) WHERE ID(b)=$book CREATE (u)-[c:COMMENTED_ON {comment:$comment}]->(b) RETURN c.comment as comment, ID(c) as id, u.login as login"
         result = tx.run(query, login=login, book=book_id, comment=comment).data()
-        return parse_comment(result[0])
+        return result[0]
 
 def add_annonymus_comment(tx, comment, book_id):
     query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
@@ -148,46 +127,33 @@ def add_annonymus_comment(tx, comment, book_id):
         query = "MATCH (b:Book) WHERE ID(b)=$book WITH b MATCH (a:Anonymus) CREATE (a)-[c:COMMENTED_ON {comment:$comment}]->(b) RETURN c.comment as comment, ID(c) as id, 'Anonymus comment' as login" 
         result = tx.run(query, book=book_id, comment=comment).data()
         print(result)
-        return parse_comment(result[0])
+        return result[0]
         
-@app.route('/comment', methods=['GET', 'POST'])
-def handle_comments_route():
+@app.route('/book/<int:id>/comment', methods=['GET', 'POST'])
+def handle_comments_route(id):
     if request.method == 'POST':
-        return add_comment_route()
+        return add_comment_route(id)
     # else:
     #     return get_comment_route()
 
-def add_comment_route():
+def add_comment_route(id):
     json_dict = request.get_json(force=True)
-    if "book" not in json_dict:
-        response = {'message': 'Book not provided'}
-        return jsonify(response), 404
-    if "comment" not in json_dict:
-        response = {'message': 'Comment not provided'}
-        return jsonify(response), 404
+    err = error_message(json_dict, ["comment"])
+    if err:
+        return err
     if "login" in json_dict and "password" not in json_dict:
         response = {'message': 'Password not provided'}
         return jsonify(response), 404
     comment = request.json['comment']
-    book = request.json['book']
     if "password" in json_dict and "login" in json_dict:
         login = request.json['login']
         password = request.json['password'].encode('ascii')
         with driver.session() as session:
-            return session.execute_write(add_comment, login, password, comment, book)
+            return session.execute_write(add_comment, login, password, comment, id)
     else:
         with driver.session() as session:
-            return session.execute_write(add_annonymus_comment, comment, book)
+            return session.execute_write(add_annonymus_comment, comment, id)
         
-
-def parse_rating(result):
-    print(result)
-    json_dict = {}
-    json_dict["rating"]= result['rating']
-    # json_dict 
-    json_dict['id']= result['id']
-    json_dict['author'] = result['login']
-    return json_dict
 
 def add_rating(tx, login, password, rating, book_id):
     query = "MATCH (u:User) WHERE u.login=$login RETURN u, ID(u) as id"
@@ -203,11 +169,10 @@ def add_rating(tx, login, password, rating, book_id):
     if not book:
         response = {'message': "Book doesn't exists"}
         return jsonify(response), 404
-    #return parse_person(result[0])
     else:
         query = "MATCH (u:User {login: $login}), (b:Book) WHERE ID(b)=$book CREATE (u)-[r:RATED {rating:$rating}]->(b) RETURN r.rating as rating, ID(r) as id, u.login as login"
         result = tx.run(query, login=login, book=book_id, rating=rating).data()
-        return parse_rating(result[0])
+        return result[0]
 
 def add_annonymus_rating(tx, rating, book_id):
     query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
@@ -216,40 +181,34 @@ def add_annonymus_rating(tx, rating, book_id):
         response = {'message': "Book doesn't exists"}
         return jsonify(response), 404
     else:
-        #print("dxfcghjkmll", book_id, type(book_id), rating, type(rating))
         query = "MATCH (b:Book) WHERE ID(b)=$book WITH b MATCH (a:Anonymus) CREATE (a)-[r:RATED {rating:$rating}]->(b) RETURN r.rating as rating, ID(r) as id, 'Anonymus rating' as login" 
         result = tx.run(query, book=book_id, rating=rating).data()
-        #print(result)
-        return parse_rating(result[0])
+        return result[0]
         
-@app.route('/rating', methods=['GET', 'POST'])
-def handle_ratings_route():
+@app.route('/book/<int:id>/rating', methods=['GET', 'POST'])
+def handle_ratings_route(id):
     if request.method == 'POST':
-        return add_rating_route()
+        return add_rating_route(id)
     # else:
     #     return get_comment_route()
 
-def add_rating_route():
+def add_rating_route(id):
     json_dict = request.get_json(force=True)
-    if "book" not in json_dict:
-        response = {'message': 'Book not provided'}
-        return jsonify(response), 404
-    if "rating" not in json_dict:
-        response = {'message': 'Rating not provided'}
-        return jsonify(response), 404
+    err = error_message(json_dict, ["rating"])
+    if err:
+        return err
     if "login" in json_dict and "password" not in json_dict:
         response = {'message': 'Password not provided'}
         return jsonify(response), 404
     rating = request.json['rating']
-    book = request.json['book']
     if "password" in json_dict and "login" in json_dict:
         login = request.json['login']
         password = request.json['password'].encode('ascii')
         with driver.session() as session:
-            return session.execute_write(add_rating, login, password, rating, book)
+            return session.execute_write(add_rating, login, password, rating, id)
     else:
         with driver.session() as session:
-            return session.execute_write(add_annonymus_rating, rating, book)
+            return session.execute_write(add_annonymus_rating, rating, id)
 
 
 if __name__ == '__main__':
