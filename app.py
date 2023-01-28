@@ -14,6 +14,12 @@ password = os.getenv("PASSWORD")
 #print(uri, user, password)
 driver = GraphDatabase.driver(uri, auth=(user, password),database="neo4j")
 
+def error_message(json_dict, values):
+    for x in values:
+        if x not in json_dict:
+            response = {'message': x + ' not provided'}
+            return jsonify(response), 404
+
 def parse_person(result):
     print(result)
     json_dict = {}
@@ -39,7 +45,6 @@ def get_users_route():
     with driver.session() as session:
         query = "MATCH (u:User) RETURN u, ID(u) as id"
         users = session.execute_read(get_users, query)
-
     response = {'users': users}
     return jsonify(response)
 
@@ -60,6 +65,9 @@ def add_user(tx, login, password):
 
 def add_user_route():
     json_dict = request.get_json(force=True)
+    err = error_message(json_dict, ["login","password"])
+    if err:
+        return err
     if "login" not in json_dict:
         response = {'message': 'Login not provided'}
         return jsonify(response), 404
@@ -97,7 +105,6 @@ def get_books_route():
     with driver.session() as session:
         query = 'MATCH (p:Publishing_House)-[r]-(b:Book)--(a:Author) RETURN b, collect(distinct(a{.*, born: toString(a.born)})) as authors, collect(distinct(p{publishing_house:p.name, release_date:toString(r.release_date) })) as published'
         books = session.execute_read(get_books, query)
-
     response = {'books': books}
     return jsonify(response)
 
