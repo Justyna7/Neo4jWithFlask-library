@@ -134,13 +134,31 @@ def add_annonymus_comment(tx, comment, book_id):
         result = tx.run(query, book=book_id, comment=comment).data()
         print(result)
         return result[0]
-        
+    
+def get_book_comments(tx, query, id):
+    results = tx.run(query, id=id).data()
+    comments = [result['comments'] for result in results]
+    return comments
+
+def get_book_comments_route(id):
+    with driver.session() as session:
+        query = """OPTIONAL MATCH (b:Book)-[r1:COMMENTED_ON]-(u:User) WHERE ID(b)=20
+WITH b,u, r1 OPTIONAL MATCH (b)-[r2:COMMENTED_ON]-(a:Anonymus) 
+WITH [r1{.*, login:u.login, id:ID(r1)}] as l1, [r2{.*, login:"Anonymus comment", id:ID(r2)}] as l2 
+WITH l1+ l2 as comments UNWIND comments as c 
+WITH c as comments WHERE comments IS NOT NULL 
+RETURN DISTINCT comments"""
+        comments = session.execute_read(get_book_comments, query, id)
+    response = {'comments': comments}
+    return jsonify(response)
+
+
 @app.route('/book/<int:id>/comment', methods=['GET', 'POST'])
 def handle_comments_route(id):
     if request.method == 'POST':
         return add_comment_route(id)
-    # else:
-    #     return get_comment_route()
+    else:
+        return get_book_comments_route(id)
 
 def add_comment_route(id):
     json_dict = request.get_json(force=True)
@@ -191,7 +209,7 @@ def handle_ratings_route(id):
     if request.method == 'POST':
         return add_rating_route(id)
     # else:
-    #     return get_comment_route()
+    #     return get_ratings_route()
 
 def add_rating_route(id):
     json_dict = request.get_json(force=True)
