@@ -142,7 +142,7 @@ def get_book_comments(tx, query, id):
 
 def get_book_comments_route(id):
     with driver.session() as session:
-        query = """OPTIONAL MATCH (b:Book)-[r1:COMMENTED_ON]-(u:User) WHERE ID(b)=20
+        query = """OPTIONAL MATCH (b:Book)-[r1:COMMENTED_ON]-(u:User) WHERE ID(b)=$id
 WITH b,u, r1 OPTIONAL MATCH (b)-[r2:COMMENTED_ON]-(a:Anonymus) 
 WITH [r1{.*, login:u.login, id:ID(r1)}] as l1, [r2{.*, login:"Anonymus comment", id:ID(r2)}] as l2 
 WITH l1+ l2 as comments UNWIND comments as c 
@@ -204,12 +204,29 @@ def add_annonymus_rating(tx, rating, book_id):
         result = tx.run(query, book=book_id, rating=rating).data()
         return result[0]
         
+def get_book_rating(tx, query, id):
+    results = tx.run(query, id=id).data()
+    ratings = [result['ratings'] for result in results]
+    return ratings
+
+def get_book_ratings_route(id):
+    with driver.session() as session:
+        query = """OPTIONAL MATCH (b:Book)-[r1:RATED]-(u:User) WHERE ID(b)=$id
+WITH b,u, r1 OPTIONAL MATCH (b)-[r2:RATED]-(a:Anonymus) 
+WITH [r1{.*, login:u.login, id:ID(r1)}] as l1, [r2{.*, login:"Anonymus rating", id:ID(r2)}] as l2 
+WITH l1+ l2 as ratings UNWIND ratings as r 
+WITH r as ratings WHERE ratings IS NOT NULL 
+RETURN DISTINCT ratings"""
+        ratings = session.execute_read(get_book_rating, query, id)
+    response = {'ratings': ratings}
+    return jsonify(response)
+
 @app.route('/book/<int:id>/rating', methods=['GET', 'POST'])
 def handle_ratings_route(id):
     if request.method == 'POST':
         return add_rating_route(id)
-    # else:
-    #     return get_ratings_route()
+    else:
+        return get_book_ratings_route(id)
 
 def add_rating_route(id):
     json_dict = request.get_json(force=True)
