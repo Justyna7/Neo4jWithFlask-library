@@ -142,7 +142,7 @@ def get_book_comments(tx, query, id):
 
 def get_book_comments_route(id):
     with driver.session() as session:
-        query = """OPTIONAL MATCH (b:Book)-[r1:COMMENTED_ON]-(u:User) WHERE ID(b)=$id
+        query = """MATCH (b:Book) WHERE ID(b)=$id WITH b OPTIONAL MATCH (b:Book)-[r1:COMMENTED_ON]-(u:User)
 WITH b,u, r1 OPTIONAL MATCH (b)-[r2:COMMENTED_ON]-(a:Anonymus) 
 WITH [r1{.*, login:u.login, id:ID(r1)}] as l1, [r2{.*, login:"Anonymus comment", id:ID(r2)}] as l2 
 WITH l1+ l2 as comments UNWIND comments as c 
@@ -211,7 +211,7 @@ def get_book_rating(tx, query, id):
 
 def get_book_ratings_route(id):
     with driver.session() as session:
-        query = """OPTIONAL MATCH (b:Book)-[r1:RATED]-(u:User) WHERE ID(b)=$id
+        query = """MATCH (b:Book) WHERE ID(b)=$id WITH b OPTIONAL MATCH (b:Book)-[r1:RATED]-(u:User) 
 WITH b,u, r1 OPTIONAL MATCH (b)-[r2:RATED]-(a:Anonymus) 
 WITH [r1{.*, login:u.login, id:ID(r1)}] as l1, [r2{.*, login:"Anonymus rating", id:ID(r2)}] as l2 
 WITH l1+ l2 as ratings UNWIND ratings as r 
