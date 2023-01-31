@@ -71,7 +71,7 @@ def add_user(tx, login, password):
     else:
         query = "CREATE (u:User {login: $login, password:$password}) RETURN u, ID(u) as id"
         passw = bcrypt.hashpw(password, bcrypt.gensalt()).decode('ascii')
-        print(passw)
+        # print(passw)
         result = tx.run(query, login=login, password = passw).data()
         return parse_person(result[0])
         
@@ -93,7 +93,6 @@ def parse_book(result):
     return json_dict
 
 
-
 @app.route('/books', methods=['GET', 'POST'])
 def handle_books_route():
     # if request.method == 'POST':
@@ -102,16 +101,27 @@ def handle_books_route():
         return get_books_route()
 
 
-def get_books(tx, query):
-    results = tx.run(query).data()
+def get_books(tx, query, data):
+    if data['genres'] != "":
+        results = tx.run(query, title = data["title"], genres=data["genres"], name = data["name"], surname = data["surname"]).data()
+    else:
+        results = tx.run(query, title = data["title"], name = data["name"], surname = data["surname"]).data()
     books = [parse_book(result) for result in results]
     return books
 
 def get_books_route():
+    data = {"title":"", "name":"", "surname":"","genres":""}
+    genres = ""
+    if request.data != b'':
+        json_dict = request.get_json(force=True)
+        # data = ["title", "name", "surname","genres"]
+        data = {x:request.json[x] if x in json_dict else "" for x in data}
+        if data['genres'] != "":
+            genres = "AND ANY(genre IN $genres WHERE genre IN b.genres)"
+    print(data)
     with driver.session() as session:
-        query = """
-            MATCH (b:Book) WITH b 
-            MATCH (p:Publishing_House)-[r]-(b)--(a:Author) WITH
+        query = "MATCH (b:Book) WHERE tolower(b.title) CONTAINS tolower($title) " + genres + """WITH b 
+            MATCH (p:Publishing_House)-[r]-(b)--(a:Author) WHERE tolower(a.name) CONTAINS tolower($name) AND tolower(a.surname) CONTAINS tolower($surname) WITH
             collect(distinct(a{.*, born: toString(a.born)})) as authors, 
             collect(distinct(p{publishing_house:p.name, release_date:toString(r.release_date) })) as published, b
             OPTIONAL MATCH (b)-[r1:RATED]-(u:User) WITH b,r1,u, authors, published
@@ -121,13 +131,10 @@ def get_books_route():
             ORDER BY a IS NOT NULL DESC
             RETURN b{.*, average_rating:a},authors, published 
         """
-        books = session.execute_read(get_books, query)
+        books = session.execute_read(get_books, query, data)
     response = {'books': books}
     return jsonify(response)
 
-@app.route('/book/<int:id>', methods=['GET'])
-def handle_book_route(id):
-    return get_book_route(id)
 
 def get_book(tx, query, id):
     err = check_if_book_exists(tx, id)
@@ -137,6 +144,7 @@ def get_book(tx, query, id):
     book = [parse_book(result) for result in results]
     return book[0]
 
+@app.route('/book/<int:id>', methods=['GET'])
 def get_book_route(id):
     with driver.session() as session:
         query = """MATCH (b:Book) WHERE ID(b)=$id WITH b 
@@ -150,8 +158,6 @@ def get_book_route(id):
             RETURN 
             b{.*, average_rating:a},authors, published"""
         book = session.execute_read(get_book, query, id)
-    #response = {'books': books}
-    #return jsonify(response)
     return book
 
 def add_comment(tx, login, password, comment, book_id):
@@ -161,11 +167,6 @@ def add_comment(tx, login, password, comment, book_id):
     err = check_if_book_exists(tx, book_id)
     if err:
         return err
-    # query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
-    # book = tx.run(query, book=book_id).data()
-    # if not book:
-    #     response = {'message': "Book doesn't exists"}
-    #     return jsonify(response), 404
     else:
         query = """MATCH (u:User {login: $login}), (b:Book) WHERE ID(b)=$book 
             CREATE (u)-[c:COMMENTED_ON {comment:$comment}]->(b) 
@@ -177,11 +178,6 @@ def add_annonymus_comment(tx, comment, book_id):
     err = check_if_book_exists(tx, book_id)
     if err:
         return err
-    # query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
-    # book = tx.run(query, book=book_id).data()
-    # if not book:
-    #     response = {'message': "Book doesn't exists"}
-    #     return jsonify(response), 404
     else:
         print("dxfcghjkmll", book_id, type(book_id), comment, type(comment))
         query = """MATCH (b:Book) WHERE ID(b)=$book 
@@ -245,11 +241,6 @@ def add_rating(tx, login, password, rating, book_id):
     err = check_if_book_exists(tx, book_id)
     if err:
         return err
-    # query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
-    # book = tx.run(query, book=book_id).data()
-    # if not book:
-    #     response = {'message': "Book doesn't exists"}
-    #     return jsonify(response), 404
     else:
         query = """MATCH (u:User {login: $login}), (b:Book) WHERE ID(b)=$book 
             CREATE (u)-[r:RATED {rating:$rating}]->(b) 
@@ -261,11 +252,6 @@ def add_annonymus_rating(tx, rating, book_id):
     err = check_if_book_exists(tx, book_id)
     if err:
         return err
-    # query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
-    # book = tx.run(query, book=book_id).data()
-    # if not book:
-    #     response = {'message': "Book doesn't exists"}
-    #     return jsonify(response), 404
     else:
         query = """MATCH (b:Book) WHERE ID(b)=$book WITH b MATCH (a:Anonymus) 
             CREATE (a)-[r:RATED {rating:$rating}]->(b) 
