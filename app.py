@@ -29,6 +29,12 @@ def check_credentials(tx, login, password):
         response = {'message': "Wrong password"}
         return jsonify(response), 401
 
+def check_if_book_exists(tx, id):
+    query = "MATCH (b:Book) WHERE ID(b)=$id RETURN b"
+    book = tx.run(query, id=id).data()
+    if not book:
+        response = {'message': "Book doesn't exists"}
+        return jsonify(response), 404
 
 def parse_person(result):
     print(result)
@@ -104,17 +110,16 @@ def get_books(tx, query):
 def get_books_route():
     with driver.session() as session:
         query = """
-        MATCH (b:Book) WITH b 
-MATCH (p:Publishing_House)-[r]-(b)--(a:Author) WITH
-collect(distinct(a{.*, born: toString(a.born)})) as authors, 
-collect(distinct(p{publishing_house:p.name, release_date:toString(r.release_date) })) as published, b
-OPTIONAL MATCH (b)-[r1:RATED]-(u:User) WITH b,r1,u, authors, published
-OPTIONAL MATCH (b)-[r2:RATED]-(a2:Anonymus) WITH [r1]+ [r2] as ratings, b, authors, published
-UNWIND  ratings as rates WITH DISTINCT rates as  ratings, b, authors, published
-WITH b, avg(ratings.rating) as a, authors, published
-ORDER BY a IS NOT NULL DESC
-RETURN b{.*, average_rating:a},authors, published 
-
+            MATCH (b:Book) WITH b 
+            MATCH (p:Publishing_House)-[r]-(b)--(a:Author) WITH
+            collect(distinct(a{.*, born: toString(a.born)})) as authors, 
+            collect(distinct(p{publishing_house:p.name, release_date:toString(r.release_date) })) as published, b
+            OPTIONAL MATCH (b)-[r1:RATED]-(u:User) WITH b,r1,u, authors, published
+            OPTIONAL MATCH (b)-[r2:RATED]-(a2:Anonymus) WITH [r1]+ [r2] as ratings, b, authors, published
+            UNWIND  ratings as rates WITH DISTINCT rates as  ratings, b, authors, published
+            WITH b, avg(ratings.rating) as a, authors, published
+            ORDER BY a IS NOT NULL DESC
+            RETURN b{.*, average_rating:a},authors, published 
         """
         books = session.execute_read(get_books, query)
     response = {'books': books}
@@ -125,6 +130,9 @@ def handle_book_route(id):
     return get_book_route(id)
 
 def get_book(tx, query, id):
+    err = check_if_book_exists(tx, id)
+    if err:
+        return err
     results = tx.run(query, id=id).data()
     book = [parse_book(result) for result in results]
     return book[0]
@@ -132,15 +140,15 @@ def get_book(tx, query, id):
 def get_book_route(id):
     with driver.session() as session:
         query = """MATCH (b:Book) WHERE ID(b)=$id WITH b 
-MATCH (p:Publishing_House)-[r]-(b)--(a:Author) WITH
-collect(distinct(a{.*, born: toString(a.born)})) as authors, 
-collect(distinct(p{publishing_house:p.name, release_date:toString(r.release_date) })) as published, b
-OPTIONAL MATCH (b)-[r1:RATED]-(u:User) WITH b,r1,u, authors, published
-OPTIONAL MATCH (b)-[r2:RATED]-(a2:Anonymus) WITH [r1]+ [r2] as ratings, b, authors, published
-UNWIND  ratings as rates WITH DISTINCT rates as  ratings, b, authors, published
-WITH b, avg(ratings.rating) as a, authors, published
-RETURN 
-b{.*, average_rating:a},authors, published"""
+            MATCH (p:Publishing_House)-[r]-(b)--(a:Author) WITH
+            collect(distinct(a{.*, born: toString(a.born)})) as authors, 
+            collect(distinct(p{publishing_house:p.name, release_date:toString(r.release_date) })) as published, b
+            OPTIONAL MATCH (b)-[r1:RATED]-(u:User) WITH b,r1,u, authors, published
+            OPTIONAL MATCH (b)-[r2:RATED]-(a2:Anonymus) WITH [r1]+ [r2] as ratings, b, authors, published
+            UNWIND  ratings as rates WITH DISTINCT rates as  ratings, b, authors, published
+            WITH b, avg(ratings.rating) as a, authors, published
+            RETURN 
+            b{.*, average_rating:a},authors, published"""
         book = session.execute_read(get_book, query, id)
     #response = {'books': books}
     #return jsonify(response)
@@ -150,30 +158,43 @@ def add_comment(tx, login, password, comment, book_id):
     err = check_credentials(tx, login, password)
     if err:
         return err
-    query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
-    book = tx.run(query, book=book_id).data()
-    if not book:
-        response = {'message': "Book doesn't exists"}
-        return jsonify(response), 404
+    err = check_if_book_exists(tx, book_id)
+    if err:
+        return err
+    # query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
+    # book = tx.run(query, book=book_id).data()
+    # if not book:
+    #     response = {'message': "Book doesn't exists"}
+    #     return jsonify(response), 404
     else:
-        query = "MATCH (u:User {login: $login}), (b:Book) WHERE ID(b)=$book CREATE (u)-[c:COMMENTED_ON {comment:$comment}]->(b) RETURN c.comment as comment, ID(c) as id, u.login as login"
+        query = """MATCH (u:User {login: $login}), (b:Book) WHERE ID(b)=$book 
+            CREATE (u)-[c:COMMENTED_ON {comment:$comment}]->(b) 
+            RETURN c.comment as comment, ID(c) as id, u.login as login"""
         result = tx.run(query, login=login, book=book_id, comment=comment).data()
         return result[0]
 
 def add_annonymus_comment(tx, comment, book_id):
-    query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
-    book = tx.run(query, book=book_id).data()
-    if not book:
-        response = {'message': "Book doesn't exists"}
-        return jsonify(response), 404
+    err = check_if_book_exists(tx, book_id)
+    if err:
+        return err
+    # query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
+    # book = tx.run(query, book=book_id).data()
+    # if not book:
+    #     response = {'message': "Book doesn't exists"}
+    #     return jsonify(response), 404
     else:
         print("dxfcghjkmll", book_id, type(book_id), comment, type(comment))
-        query = "MATCH (b:Book) WHERE ID(b)=$book WITH b MATCH (a:Anonymus) CREATE (a)-[c:COMMENTED_ON {comment:$comment}]->(b) RETURN c.comment as comment, ID(c) as id, 'Anonymus comment' as login" 
+        query = """MATCH (b:Book) WHERE ID(b)=$book 
+            WITH b MATCH (a:Anonymus) CREATE (a)-[c:COMMENTED_ON {comment:$comment}]->(b) 
+            RETURN c.comment as comment, ID(c) as id, 'Anonymus comment' as login"""
         result = tx.run(query, book=book_id, comment=comment).data()
         print(result)
         return result[0]
     
 def get_book_comments(tx, query, id):
+    err = check_if_book_exists(tx, id)
+    if err:
+        return err
     results = tx.run(query, id=id).data()
     comments = [result['comments'] for result in results]
     return comments
@@ -181,11 +202,11 @@ def get_book_comments(tx, query, id):
 def get_book_comments_route(id):
     with driver.session() as session:
         query = """MATCH (b:Book) WHERE ID(b)=$id WITH b OPTIONAL MATCH (b:Book)-[r1:COMMENTED_ON]-(u:User)
-WITH b,u, r1 OPTIONAL MATCH (b)-[r2:COMMENTED_ON]-(a:Anonymus) 
-WITH [r1{.*, login:u.login, id:ID(r1)}] as l1, [r2{.*, login:"Anonymus comment", id:ID(r2)}] as l2 
-WITH l1+ l2 as comments UNWIND comments as c 
-WITH c as comments WHERE comments IS NOT NULL 
-RETURN DISTINCT comments"""
+            WITH b,u, r1 OPTIONAL MATCH (b)-[r2:COMMENTED_ON]-(a:Anonymus) 
+            WITH [r1{.*, login:u.login, id:ID(r1)}] as l1, [r2{.*, login:"Anonymus comment", id:ID(r2)}] as l2 
+            WITH l1+ l2 as comments UNWIND comments as c 
+            WITH c as comments WHERE comments IS NOT NULL 
+            RETURN DISTINCT comments"""
         comments = session.execute_read(get_book_comments, query, id)
     response = {'comments': comments}
     return jsonify(response)
@@ -221,28 +242,41 @@ def add_rating(tx, login, password, rating, book_id):
     err = check_credentials(tx, login, password)
     if err:
         return err
-    query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
-    book = tx.run(query, book=book_id).data()
-    if not book:
-        response = {'message': "Book doesn't exists"}
-        return jsonify(response), 404
+    err = check_if_book_exists(tx, book_id)
+    if err:
+        return err
+    # query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
+    # book = tx.run(query, book=book_id).data()
+    # if not book:
+    #     response = {'message': "Book doesn't exists"}
+    #     return jsonify(response), 404
     else:
-        query = "MATCH (u:User {login: $login}), (b:Book) WHERE ID(b)=$book CREATE (u)-[r:RATED {rating:$rating}]->(b) RETURN r.rating as rating, ID(r) as id, u.login as login"
+        query = """MATCH (u:User {login: $login}), (b:Book) WHERE ID(b)=$book 
+            CREATE (u)-[r:RATED {rating:$rating}]->(b) 
+            RETURN r.rating as rating, ID(r) as id, u.login as login"""
         result = tx.run(query, login=login, book=book_id, rating=rating).data()
         return result[0]
 
 def add_annonymus_rating(tx, rating, book_id):
-    query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
-    book = tx.run(query, book=book_id).data()
-    if not book:
-        response = {'message': "Book doesn't exists"}
-        return jsonify(response), 404
+    err = check_if_book_exists(tx, book_id)
+    if err:
+        return err
+    # query = "MATCH (b:Book) WHERE ID(b)=$book RETURN b"
+    # book = tx.run(query, book=book_id).data()
+    # if not book:
+    #     response = {'message': "Book doesn't exists"}
+    #     return jsonify(response), 404
     else:
-        query = "MATCH (b:Book) WHERE ID(b)=$book WITH b MATCH (a:Anonymus) CREATE (a)-[r:RATED {rating:$rating}]->(b) RETURN r.rating as rating, ID(r) as id, 'Anonymus rating' as login" 
+        query = """MATCH (b:Book) WHERE ID(b)=$book WITH b MATCH (a:Anonymus) 
+            CREATE (a)-[r:RATED {rating:$rating}]->(b) 
+            RETURN r.rating as rating, ID(r) as id, 'Anonymus rating' as login""" 
         result = tx.run(query, book=book_id, rating=rating).data()
         return result[0]
         
 def get_book_rating(tx, query, id):
+    err = check_if_book_exists(tx, id)
+    if err:
+        return err
     results = tx.run(query, id=id).data()
     ratings = [result['ratings'] for result in results]
     return ratings
@@ -250,11 +284,11 @@ def get_book_rating(tx, query, id):
 def get_book_ratings_route(id):
     with driver.session() as session:
         query = """MATCH (b:Book) WHERE ID(b)=$id WITH b OPTIONAL MATCH (b:Book)-[r1:RATED]-(u:User) 
-WITH b,u, r1 OPTIONAL MATCH (b)-[r2:RATED]-(a:Anonymus) 
-WITH [r1{.*, login:u.login, id:ID(r1)}] as l1, [r2{.*, login:"Anonymus rating", id:ID(r2)}] as l2 
-WITH l1+ l2 as ratings UNWIND ratings as r 
-WITH r as ratings WHERE ratings IS NOT NULL 
-RETURN DISTINCT ratings"""
+            WITH b,u, r1 OPTIONAL MATCH (b)-[r2:RATED]-(a:Anonymus) 
+            WITH [r1{.*, login:u.login, id:ID(r1)}] as l1, [r2{.*, login:"Anonymus rating", id:ID(r2)}] as l2 
+            WITH l1+ l2 as ratings UNWIND ratings as r 
+            WITH r as ratings WHERE ratings IS NOT NULL 
+            RETURN DISTINCT ratings"""
         ratings = session.execute_read(get_book_rating, query, id)
     response = {'ratings': ratings}
     return jsonify(response)
