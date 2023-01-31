@@ -125,7 +125,6 @@ collect(distinct(p{publishing_house:p.name, release_date:toString(r.release_date
 OPTIONAL MATCH (b)-[r1:RATED]-(u:User) WITH b,r1,u, authors, published
 OPTIONAL MATCH (b)-[r2:RATED]-(a2:Anonymus) WITH [r1]+ [r2] as ratings, b, authors, published
 UNWIND  ratings as rates WITH DISTINCT rates as  ratings, b, authors, published
-WHERE ratings IS NOT NULL 
 WITH b, avg(ratings.rating) as a, authors, published
 RETURN 
 b{.*, average_rating:a},authors, published"""
