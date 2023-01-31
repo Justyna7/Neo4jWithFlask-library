@@ -87,6 +87,7 @@ def parse_book(result):
     return json_dict
 
 
+
 @app.route('/books', methods=['GET', 'POST'])
 def handle_books_route():
     # if request.method == 'POST':
@@ -102,7 +103,19 @@ def get_books(tx, query):
 
 def get_books_route():
     with driver.session() as session:
-        query = 'MATCH (p:Publishing_House)-[r]-(b:Book)--(a:Author) RETURN b, collect(distinct(a{.*, born: toString(a.born)})) as authors, collect(distinct(p{publishing_house:p.name, release_date:toString(r.release_date) })) as published'
+        query = """
+        MATCH (b:Book) WITH b 
+MATCH (p:Publishing_House)-[r]-(b)--(a:Author) WITH
+collect(distinct(a{.*, born: toString(a.born)})) as authors, 
+collect(distinct(p{publishing_house:p.name, release_date:toString(r.release_date) })) as published, b
+OPTIONAL MATCH (b)-[r1:RATED]-(u:User) WITH b,r1,u, authors, published
+OPTIONAL MATCH (b)-[r2:RATED]-(a2:Anonymus) WITH [r1]+ [r2] as ratings, b, authors, published
+UNWIND  ratings as rates WITH DISTINCT rates as  ratings, b, authors, published
+WITH b, avg(ratings.rating) as a, authors, published
+ORDER BY a IS NOT NULL DESC
+RETURN b{.*, average_rating:a},authors, published 
+
+        """
         books = session.execute_read(get_books, query)
     response = {'books': books}
     return jsonify(response)
