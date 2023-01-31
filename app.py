@@ -107,6 +107,32 @@ def get_books_route():
     response = {'books': books}
     return jsonify(response)
 
+@app.route('/book/<int:id>', methods=['GET'])
+def handle_book_route(id):
+    return get_book_route(id)
+
+def get_book(tx, query, id):
+    results = tx.run(query, id=id).data()
+    book = [parse_book(result) for result in results]
+    return book[0]
+
+def get_book_route(id):
+    with driver.session() as session:
+        query = """MATCH (b:Book) WHERE ID(b)=$id WITH b 
+MATCH (p:Publishing_House)-[r]-(b)--(a:Author) WITH
+collect(distinct(a{.*, born: toString(a.born)})) as authors, 
+collect(distinct(p{publishing_house:p.name, release_date:toString(r.release_date) })) as published, b
+OPTIONAL MATCH (b)-[r1:RATED]-(u:User) WITH b,r1,u, authors, published
+OPTIONAL MATCH (b)-[r2:RATED]-(a2:Anonymus) WITH [r1]+ [r2] as ratings, b, authors, published
+UNWIND  ratings as rates WITH DISTINCT rates as  ratings, b, authors, published
+WHERE ratings IS NOT NULL 
+WITH b, avg(ratings.rating) as a, authors, published
+RETURN 
+b{.*, average_rating:a},authors, published"""
+        book = session.execute_read(get_book, query, id)
+    #response = {'books': books}
+    #return jsonify(response)
+    return book
 
 def add_comment(tx, login, password, comment, book_id):
     err = check_credentials(tx, login, password)
