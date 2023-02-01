@@ -18,6 +18,10 @@ def error_message(json_dict, values):
         if x not in json_dict:
             response = {'message': x + ' not provided'}
             return jsonify(response), 404
+def no_json_error_message(request):
+    if request.data == b'':
+        response = {'message': 'Content type should be application/json and request body should not be empty'}
+        return jsonify(response), 404
 
 def check_credentials(tx, login, password):
     query = "MATCH (u:User) WHERE u.login=$login RETURN u, ID(u) as id"
@@ -105,10 +109,59 @@ def parse_book(result):
 
 @app.route('/books', methods=['GET', 'POST'])
 def handle_books_route():
-    # if request.method == 'POST':
-    #     return add_book_route()
-    # else:
+    if request.method == 'POST':
+        return add_book_route()
+    else:
         return get_books_route()
+
+
+
+def add_book(tx, data):
+    err = check_admin_credentials(data["login"], data["password"])
+    if err:
+        return err
+    query = "MATCH (p:Publishing_House {name:$publishing_house}) RETURN p, ID(p) as id"
+    # query = "MATCH (u:User) WHERE u.login=$login  RETURN u"
+    result = tx.run(query, publishing_house=data["publishing_house"]).data()
+    if not result:
+        response = {'message': "Publishing House with name %s doesn't exists in database" % (data["publishing_house"])}
+        return jsonify(response), 404
+    ph_id = result["id"]
+    query = "MATCH (a:Author {name:$author_name, surname: $author_surname}) RETURN a, ID(a) as id"
+    # query = "MATCH (u:User) WHERE u.login=$login  RETURN u"
+    result = tx.run(query, author_name=data["author_name"], author_surname=data["author_surname"]).data()
+    if not result:
+        response = {'message': "Author with name %s and surname %s doesn't exists in database" % (data["author_name"], data["author_surname"])}
+        return jsonify(response), 404
+    author_id = result["id"]
+    query = """MATCH (a:Author) WHERE ID(a) = $author_id WITH a MATCH (p:Publishing_House) WHERE ID(p) = $ph_id WITH a, p
+    CREATE (b:Book {title: $title, cover_photo: $cover_photo, genres:$genres, description:$description, number:$number})
+    CREATE (a)<-[:WRITTEN_BY]-(b)-[:RELEASED_BY {release_date:date($release_date)}]->(p) RETURN ID(b) as id"""
+    # passw = bcrypt.hashpw(password, bcrypt.gensalt()).decode('ascii')
+    # # print(passw)
+    result = tx.run(query, author_id=author_id, ph_id=ph_id, 
+        title=data["title"], cover_photo=data["cover_photo"],genres=data["genres"], description=data["description"], number=data["number"],release_date=data["release_date"]  ).data()
+    return jsonify({"Book added under id":result})
+        
+def add_book_route():
+    err = no_json_error_message(request)
+    if err:
+        return err
+    json_dict = request.get_json(force=True)
+    cover_photo = (request.json["cover_photo"] if "cover_photo" in json_dict else "")
+    # print(cover_photo)
+    # return jsonify({"response":cover_photo})
+    needed_values=["login","password", "title", "genres", "description", "author_name", "author_surname", "release_date", "publishing_house", "number"]
+    err = error_message(json_dict, needed_values)
+    if err:
+        return err
+    data = {x:request.json[x] for x in needed_values if x!="password"}
+    data["cover_photo"] = cover_photo
+    data["password"] = request.json['password'].encode('ascii')
+    # login = request.json['login']
+    # password = request.json['password'].encode('ascii')
+    with driver.session() as session:
+        return session.execute_write(add_book, data)
 
 
 def get_books(tx, query, data):
