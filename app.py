@@ -126,20 +126,17 @@ def handle_books_route():
         return get_books_route()
 
 
-
 def add_book(tx, data):
     err = check_admin_credentials(tx, data["login"], data["password"])
     if err:
         return err
     query = "MATCH (p:Publishing_House {name:$publishing_house}) RETURN p, ID(p) as id"
-    # query = "MATCH (u:User) WHERE u.login=$login  RETURN u"
     result = tx.run(query, publishing_house=data["publishing_house"]).data()
     if not result:
         response = {'message': "Publishing House with name %s doesn't exists in database" % (data["publishing_house"])}
         return jsonify(response), 404
     ph_id = result[0]["id"]
     query = "MATCH (a:Author {name:$author_name, surname: $author_surname}) RETURN a, ID(a) as id"
-    # query = "MATCH (u:User) WHERE u.login=$login  RETURN u"
     result = tx.run(query, author_name=data["author_name"], author_surname=data["author_surname"]).data()
     if not result:
         response = {'message': "Author with name %s and surname %s doesn't exists in database" % (data["author_name"], data["author_surname"])}
@@ -153,8 +150,6 @@ def add_book(tx, data):
     query = """MATCH (a:Author) WHERE ID(a) = $author_id WITH a MATCH (p:Publishing_House) WHERE ID(p) = $ph_id WITH a, p
     CREATE (b:Book {title: $title, cover_photo: $cover_photo, genres:$genres, description:$description, number:$number})
     CREATE (a)<-[:WRITTEN_BY]-(b)-[:RELEASED_BY {release_date:date($release_date)}]->(p) RETURN ID(b) as id"""
-    # passw = bcrypt.hashpw(password, bcrypt.gensalt()).decode('ascii')
-    # # print(passw)
     result = tx.run(query, author_id=author_id, ph_id=ph_id, 
         title=data["title"], cover_photo=data["cover_photo"],genres=data["genres"], description=data["description"], number=data["number"],release_date=data["release_date"]  ).data()
     return jsonify({"Book added under id":result})
@@ -165,8 +160,6 @@ def add_book_route():
         return err
     json_dict = request.get_json(force=True)
     cover_photo = (request.json["cover_photo"] if "cover_photo" in json_dict else "")
-    # print(cover_photo)
-    # return jsonify({"response":cover_photo})
     needed_values=["login","password", "title", "genres", "description", "author_name", "author_surname", "release_date", "publishing_house", "number"]
     err = error_message(json_dict, needed_values)
     if err:
@@ -176,8 +169,6 @@ def add_book_route():
     data["password"] = request.json['password'].encode('ascii')
     with driver.session() as session:
         return session.execute_write(add_book, data)
-    # print(data["description"])
-    # return jsonify({"response":data})
 
 def get_books(tx, query, data):
     if data['genres'] != "":
@@ -401,9 +392,12 @@ def add_admin(tx, login, password):
         return parse_person(result[0], "a")
         
 def add_admin_route():
-    err = error_message(request.get_json(force=True), ["login","password"])
+    err = initiate_request_error_message(request, ["login","password"])
     if err:
         return err
+    # err = error_message(request.get_json(force=True), ["login","password"])
+    # if err:
+    #     return err
     login = request.json['login']
     password = request.json['password'].encode('ascii')
     with driver.session() as session:
@@ -429,14 +423,6 @@ def add_author_route():
     err = initiate_request_error_message(request, needed_values)
     if err:
         return err
-    # err = no_json_error_message(request)
-    # if err:
-    #     return err
-    # json_dict = request.get_json(force=True)
-    # needed_values=["login","password", "name", "surname", "born"]
-    # err = error_message(json_dict, needed_values)
-    # if err:
-    #     return err
     data = {x:request.json[x] for x in needed_values if x!="password"}
     data["password"] = request.json['password'].encode('ascii')
     with driver.session() as session:
@@ -452,9 +438,9 @@ def add_publishing_house(tx, data):
     if result:
         response = {'message': "Publishing House %s already exists" % (data["name"])}
         return jsonify(response), 404
-    query = """CREATE (p:Publishing_House {name:$name}) RETURN ID(p) as id"""
+    query = """CREATE (p:Publishing_House {name:$name}) RETURN p{.*, id:ID(p)} as `publishing house`"""
     result = tx.run(query, name=data["name"]).data()
-    return jsonify({"Publishing House added under id":result})
+    return result[0]
 
 @app.route('/publishing_house', methods=[ 'POST'])
 def add_publishing_house_route():
@@ -462,52 +448,49 @@ def add_publishing_house_route():
     err = initiate_request_error_message(request, needed_values)
     if err:
         return err
-    # err = no_json_error_message(request)
-    # if err:
-    #     return err
-    # json_dict = request.get_json(force=True)
-    # needed_values=["login","password", "name"]
-    # err = error_message(json_dict, needed_values)
-    # if err:
-    #     return err
     data = {x:request.json[x] for x in needed_values if x!="password"}
     data["password"] = request.json['password'].encode('ascii')
     with driver.session() as session:
         return session.execute_write(add_publishing_house, data)
 
+def get_publishing_house(tx, id):
+    query = "MATCH (p:Publishing_House) WHERE ID(p)=$id RETURN p{.*, id:ID(p)} as `publishing house`"
+    result = tx.run(query, id=id).data()
+    if not result:
+        response = {'message': "Publishing House under id %d doesn't exists in database" % (id)}
+        return jsonify(response), 404
+    else:
+        return result[0]
+
 @app.route('/publishing_house/<int:id>', methods=['GET'])
 def get_publishing_house_route(id):
-    # err = no_json_error_message(request)
-    # if err:
-    #     return err
-    # json_dict = request.get_json(force=True)
-    # needed_values=["login","password", "name"]
-    # err = error_message(json_dict, needed_values)
-    # if err:
-    #     return err
-    # data = {x:request.json[x] for x in needed_values if x!="password"}
-    # data["password"] = request.json['password'].encode('ascii')
     with driver.session() as session:
         return session.execute_write(get_publishing_house, id)
 
+def edit_publishing_house(tx, data, id):
+    err = check_admin_credentials(tx, data["login"], data["password"])
+    if err:
+        return err
+    query = "MATCH (p:Publishing_House) WHERE ID(p)=$id RETURN p{.*, id:ID(p)} as `publishing house`"
+    result = tx.run(query, id=id).data()
+    if not result:
+        response = {'message': "Publishing House under id %d doesn't exists in database" % (id)}
+        return jsonify(response), 404
+    query = """MATCH (p:Publishing_House) WHERE ID(p)=$id SET p.name=$name RETURN p{.*, id:ID(p)} as `publishing house`"""
+    result = tx.run(query, id=id, name=data["name"]).data()
+    return result[0]
+
 @app.route('/publishing_house/<int:id>', methods=['PUT'])
 def edit_publishing_house_route(id):
+    #print("AAAAAAAA")
     needed_values=["login","password", "name"]
     err = initiate_request_error_message(request, needed_values)
     if err:
         return err
-    # err = no_json_error_message(request)
-    # if err:
-    #     return err
-    # json_dict = request.get_json(force=True)
-    # needed_values=["login","password", "name"]
-    # err = error_message(json_dict, needed_values)
-    # if err:
-    #     return err
     data = {x:request.json[x] for x in needed_values if x!="password"}
     data["password"] = request.json['password'].encode('ascii')
     with driver.session() as session:
-        return session.execute_write(add_publishing_house, data, id)
+        return session.execute_write(edit_publishing_house, data, id)
 
 @app.route('/publishing_house/<int:id>', methods=['DELETE'])
 def delete_publishing_house_route():
@@ -515,14 +498,6 @@ def delete_publishing_house_route():
     err = initiate_request_error_message(request, needed_values)
     if err:
         return err
-    # err = no_json_error_message(request)
-    # if err:
-    #     return err
-    # json_dict = request.get_json(force=True)
-    # needed_values=["login","password"]
-    # err = error_message(json_dict, needed_values)
-    # if err:
-    #     return err
     data = {x:request.json[x] for x in needed_values if x!="password"}
     data["password"] = request.json['password'].encode('ascii')
     with driver.session() as session:
