@@ -36,10 +36,10 @@ def check_if_book_exists(tx, id):
         response = {'message': "Book doesn't exists"}
         return jsonify(response), 404
 
-def parse_person(result):
+def parse_person(result, c):
     print(result)
     json_dict = {}
-    json_dict['login']= result['u']['login']
+    json_dict['login']= result[c]['login']
     json_dict['id'] = result['id']
     return json_dict
 
@@ -52,7 +52,7 @@ def handle_users_route():
 
 def get_users(tx, query):
     results = tx.run(query).data()
-    users = [parse_person(result) for result in results]
+    users = [parse_person(result, "u") for result in results]
     return users
 
 def get_users_route():
@@ -73,7 +73,7 @@ def add_user(tx, login, password):
         passw = bcrypt.hashpw(password, bcrypt.gensalt()).decode('ascii')
         # print(passw)
         result = tx.run(query, login=login, password = passw).data()
-        return parse_person(result[0])
+        return parse_person(result[0], "u")
         
 def add_user_route():
     err = error_message(request.get_json(force=True), ["login","password"])
@@ -121,7 +121,8 @@ def get_books_route():
     print(data)
     with driver.session() as session:
         query = "MATCH (b:Book) WHERE tolower(b.title) CONTAINS tolower($title) " + genres + """WITH b 
-            MATCH (p:Publishing_House)-[r]-(b)--(a:Author) WHERE tolower(a.name) CONTAINS tolower($name) AND tolower(a.surname) CONTAINS tolower($surname) WITH
+            MATCH (p:Publishing_House)-[r]-(b)--(a:Author) 
+            WHERE tolower(a.name) CONTAINS tolower($name) AND tolower(a.surname) CONTAINS tolower($surname) WITH
             collect(distinct(a{.*, born: toString(a.born)})) as authors, 
             collect(distinct(p{publishing_house:p.name, release_date:toString(r.release_date) })) as published, b
             OPTIONAL MATCH (b)-[r1:RATED]-(u:User) WITH b,r1,u, authors, published
@@ -304,6 +305,32 @@ def add_rating_route(id):
         with driver.session() as session:
             return session.execute_write(add_annonymus_rating, rating, id)
 
+@app.route('/admin', methods=['GET', 'POST'])
+def handle_admin_route():
+    if request.method == 'POST':
+        return add_admin_route()
+
+def add_admin(tx, login, password):
+    query = "MATCH (a:Admin) WHERE a.login=$login  RETURN a"
+    result = tx.run(query, login=login).data()
+    if result:
+        response = {'message': 'Admin already exists'}
+        return jsonify(response), 404
+    else:
+        query = "CREATE (a:Admin {login: $login, password:$password}) RETURN a, ID(a) as id"
+        passw = bcrypt.hashpw(password, bcrypt.gensalt()).decode('ascii')
+        # print(passw)
+        result = tx.run(query, login=login, password = passw).data()
+        return parse_person(result[0], "a")
+        
+def add_admin_route():
+    err = error_message(request.get_json(force=True), ["login","password"])
+    if err:
+        return err
+    login = request.json['login']
+    password = request.json['password'].encode('ascii')
+    with driver.session() as session:
+        return session.execute_write(add_admin, login, password)
 
 if __name__ == '__main__':
     app.run()
