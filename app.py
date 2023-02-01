@@ -29,6 +29,16 @@ def check_credentials(tx, login, password):
         response = {'message': "Wrong password"}
         return jsonify(response), 401
 
+def check_admin_credentials(tx, login, password):
+    query = "MATCH (a:Admin) WHERE a.login=$login RETURN a, ID(a) as id"
+    admin = tx.run(query, login=login).data()
+    if not admin:
+        response = {'message': "Admin doesn't exists"}
+        return jsonify(response), 404
+    if not bcrypt.checkpw(password, admin[0]['a']['password'].encode('ascii')):
+        response = {'message': "Wrong password"}
+        return jsonify(response), 401
+
 def check_if_book_exists(tx, id):
     query = "MATCH (b:Book) WHERE ID(b)=$id RETURN b"
     book = tx.run(query, id=id).data()
