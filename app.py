@@ -598,5 +598,52 @@ def delete_book_publishing_house_route(id):
     with driver.session() as session:
         return session.execute_write(delete_book_publishing_house, data, id)
 
+
+@app.route('/book/<int:id>/reserve', methods=['POST'])
+def make_reservation_route(id):
+    needed_values=["login","password"]
+    err = initiate_request_error_message(request, needed_values)
+    if err:
+        return err
+    data = {x:request.json[x] for x in needed_values if x!="password"}
+    data["password"] = request.json['password'].encode('ascii')
+    with driver.session() as session:
+        return session.execute_write(make_reservation, data, id)
+
+@app.route('/user/<int:id>/reservation_history', methods=['GET'])
+def get_reservation_history_route(id):
+    needed_values=["login","password"]
+    err = initiate_request_error_message(request, needed_values)
+    if err:
+        return err
+    data = {x:request.json[x] for x in needed_values if x!="password"}
+    data["password"] = request.json['password'].encode('ascii')
+    with driver.session() as session:
+        return session.execute_write(get_reservation_history, data, id)
+    
+@app.route('/user/<int:id>/reservation/<int:reservation_id>/cancel', methods=['DELETE'])
+def cancel_reservation_user_route(id, reservation_id):
+    needed_values=["login","password"]
+    err = initiate_request_error_message(request, needed_values)
+    if err:
+        return err
+    data = {x:request.json[x] for x in needed_values if x!="password"}
+    data["password"] = request.json['password'].encode('ascii')
+    with driver.session() as session:
+        return session.execute_write(cancel_reservation_user, data, id)
+    
+@app.route('/reservation/<int:reservation_id>/cancel', methods=['DELETE'])
+def cancel_reservation_admin_route(reservation_id):
+    needed_values=["login","password"]
+    err = initiate_request_error_message(request, needed_values)
+    if err:
+        return err
+    data = {x:request.json[x] for x in needed_values if x!="password"}
+    data["password"] = request.json['password'].encode('ascii')
+    with driver.session() as session:
+        return session.execute_write(cancel_reservation_admin, data, id)
+    
+
+
 if __name__ == '__main__':
     app.run()
