@@ -46,5 +46,19 @@ def check_if_book_exists(tx, id):
     query = "MATCH (b:Book) WHERE ID(b)=$id RETURN b"
     book = tx.run(query, id=id).data()
     if not book:
-        response = {'message': "Book doesn't exists"}
+        response = {'message': "Book under id %d doesn't exist" % (id)}
+        return jsonify(response), 404
+    
+def check_if_publishing_house_exists(tx, id):
+    query = "MATCH (p:Publishing_House) WHERE ID(p)=$id RETURN p"
+    result = tx.run(query, id=id).data()
+    if not result:
+        response = {'message': "Publishing House under id %d doesn't exist" % (id)}
+        return jsonify(response), 404
+    
+def check_if_author_exists(tx, id):
+    query = "MATCH (a:Author) WHERE ID(a)=$id RETURN a"
+    result = tx.run(query, id=id).data()
+    if not result:
+        response = {'message': "Author under id %d doesn't exist" % (id)}
         return jsonify(response), 404

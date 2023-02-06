@@ -13,54 +13,6 @@ user = os.getenv("NEO4J_USERNAME")
 password = os.getenv("PASSWORD")
 driver = GraphDatabase.driver(uri, auth=(user, password),database="neo4j")
 
-# def error_message(json_dict, values):
-#     for x in values:
-#         if x not in json_dict:
-#             response = {'message': x + ' not provided'}
-#             return jsonify(response), 404
-
-# def no_json_error_message(request):
-#     if request.data == b'':
-#         response = {'message': 'Content type should be application/json and request body should not be empty'}
-#         return jsonify(response), 404
-
-# def initiate_request_error_message(request, needed_values):
-#     err = no_json_error_message(request)
-#     if err:
-#         return err
-#     json_dict = request.get_json(force=True)
-#     # needed_values=["login","password"]
-#     err = error_message(json_dict, needed_values)
-#     if err:
-#         return err
-
-# def check_credentials(tx, login, password):
-#     query = "MATCH (u:User) WHERE u.login=$login RETURN u, ID(u) as id"
-#     user = tx.run(query, login=login).data()
-#     if not user:
-#         response = {'message': "User doesn't exists"}
-#         return jsonify(response), 404
-#     if not bcrypt.checkpw(password, user[0]['u']['password'].encode('ascii')):
-#         response = {'message': "Wrong password"}
-#         return jsonify(response), 401
-
-# def check_admin_credentials(tx, login, password):
-#     query = "MATCH (a:Admin) WHERE a.login=$login RETURN a, ID(a) as id"
-#     admin = tx.run(query, login=login).data()
-#     if not admin:
-#         response = {'message': "Admin doesn't exists"}
-#         return jsonify(response), 404
-#     if not bcrypt.checkpw(password, admin[0]['a']['password'].encode('ascii')):
-#         response = {'message': "Wrong password"}
-#         return jsonify(response), 401
-
-# def check_if_book_exists(tx, id):
-#     query = "MATCH (b:Book) WHERE ID(b)=$id RETURN b"
-#     book = tx.run(query, id=id).data()
-#     if not book:
-#         response = {'message': "Book doesn't exists"}
-#         return jsonify(response), 404
-
 def parse_person(result, c):
     print(result)
     json_dict = {}
@@ -96,7 +48,6 @@ def add_user(tx, login, password):
     else:
         query = "CREATE (u:User {login: $login, password:$password}) RETURN u, ID(u) as id"
         passw = bcrypt.hashpw(password, bcrypt.gensalt()).decode('ascii')
-        # print(passw)
         result = tx.run(query, login=login, password = passw).data()
         return parse_person(result[0], "u")
         
@@ -471,11 +422,14 @@ def edit_publishing_house(tx, data, id):
     err = check_admin_credentials(tx, data["login"], data["password"])
     if err:
         return err
-    query = "MATCH (p:Publishing_House) WHERE ID(p)=$id RETURN p{.*, id:ID(p)} as `publishing house`"
-    result = tx.run(query, id=id).data()
-    if not result:
-        response = {'message': "Publishing House under id %d doesn't exists in database" % (id)}
-        return jsonify(response), 404
+    err = check_if_publishing_house_exists(tx, id)
+    if err:
+        return err
+    # query = "MATCH (p:Publishing_House) WHERE ID(p)=$id RETURN p{.*, id:ID(p)} as `publishing house`"
+    # result = tx.run(query, id=id).data()
+    # if not result:
+    #     response = {'message': "Publishing House under id %d doesn't exists in database" % (id)}
+    #     return jsonify(response), 404
     query = """MATCH (p:Publishing_House) WHERE ID(p)=$id SET p.name=$name RETURN p{.*, id:ID(p)} as `publishing house`"""
     result = tx.run(query, id=id, name=data["name"]).data()
     return result[0]
@@ -495,11 +449,14 @@ def delete_publishing_house(tx, data, id):
     err = check_admin_credentials(tx, data["login"], data["password"])
     if err:
         return err
-    query = "MATCH (p:Publishing_House) WHERE ID(p)=$id RETURN p{.*, id:ID(p)} as `publishing house`"
-    result = tx.run(query, id=id).data()
-    if not result:
-        response = {'message': "Publishing House under id %d doesn't exists in database" % (id)}
-        return jsonify(response), 404
+    err = check_if_publishing_house_exists(tx, id)
+    if err:
+        return err
+    # query = "MATCH (p:Publishing_House) WHERE ID(p)=$id RETURN p{.*, id:ID(p)} as `publishing house`"
+    # result = tx.run(query, id=id).data()
+    # if not result:
+    #     response = {'message': "Publishing House under id %d doesn't exists in database" % (id)}
+    #     return jsonify(response), 404
     query = "MATCH (p:Publishing_House)-[r]-(n) WHERE ID(p)=$id RETURN r"
     result = tx.run(query, id=id).data()
     if result:
@@ -542,11 +499,14 @@ def edit_author(tx, data, id):
     err = check_admin_credentials(tx, data["login"], data["password"])
     if err:
         return err
-    query = "MATCH (a:Author) WHERE ID(a)=$id RETURN a{.*, id:ID(a)} as author"
-    result = tx.run(query, id=id).data()
-    if not result:
-        response = {'message': "Author under id %d doesn't exists in database" % (id)}
-        return jsonify(response), 404
+    err = check_if_author_exists(tx, id)
+    if err:
+        return err
+    # query = "MATCH (a:Author) WHERE ID(a)=$id RETURN a{.*, id:ID(a)} as author"
+    # result = tx.run(query, id=id).data()
+    # if not result:
+    #     response = {'message': "Author under id %d doesn't exists in database" % (id)}
+    #     return jsonify(response), 404
     query = """MATCH (a:Author) WHERE ID(a)=$id SET a.name=$name, a.surname=$surname, a.born=date($born) RETURN a{.*, id:ID(a), born:toString(a.born)} as author`"""
     result = tx.run(query, id=id, name=data["name"], surname=data["surname"], born=data["born"]).data()
     return result[0]
@@ -566,11 +526,14 @@ def delete_author(tx, data, id):
     err = check_admin_credentials(tx, data["login"], data["password"])
     if err:
         return err
-    query = "MATCH (a:Author) WHERE ID(a)=$id RETURN a{.*, id:ID(a), born:toString(a.born)} as author"
-    result = tx.run(query, id=id).data()
-    if not result:
-        response = {'message': "Author under id %d doesn't exists in database" % (id)}
-        return jsonify(response), 404
+    err = check_if_author_exists(tx, id)
+    if err:
+        return err
+    # query = "MATCH (a:Author) WHERE ID(a)=$id RETURN a{.*, id:ID(a), born:toString(a.born)} as author"
+    # result = tx.run(query, id=id).data()
+    # if not result:
+    #     response = {'message': "Author under id %d doesn't exists in database" % (id)}
+    #     return jsonify(response), 404
     query = "MATCH (a:Author)-[r]-(n) WHERE ID(a)=$id RETURN r"
     result = tx.run(query, id=id).data()
     if result:
@@ -598,11 +561,14 @@ def add_book_author(tx, data, id):
     err = check_if_book_exists(tx,id)
     if err:
         return err
-    query = "MATCH (a:Author) WHERE ID(a)=$author_id RETURN a{.*, id:ID(a), born:toString(a.born)} as author"
-    result = tx.run(query, author_id=data["author_id"]).data()
-    if not result:
-        response = {'message': "Author under id %d doesn't exists in database" % (id)}
-        return jsonify(response), 404
+    err = check_if_author_exists(tx, id)
+    if err:
+        return err
+    # query = "MATCH (a:Author) WHERE ID(a)=$author_id RETURN a{.*, id:ID(a), born:toString(a.born)} as author"
+    # result = tx.run(query, author_id=data["author_id"]).data()
+    # if not result:
+    #     response = {'message': "Author under id %d doesn't exists in database" % (id)}
+    #     return jsonify(response), 404
     query = "MATCH (a:Author)-[r:WRITTEN_BY]-(b:Book) WHERE ID(a)=$author_id AND ID(b)=$id RETURN r"
     result = tx.run(query, author_id=data["author_id"], id=id).data()
     if result:
@@ -633,11 +599,14 @@ def delete_book_author(tx, data, id):
     err = check_if_book_exists(tx,id)
     if err:
         return err
-    query = "MATCH (a:Author) WHERE ID(a)=$author_id RETURN a{.*, id:ID(a), born:toString(a.born)} as author"
-    result = tx.run(query, author_id=data["author_id"]).data()
-    if not result:
-        response = {'message': "Author under id %d doesn't exists in database" % (id)}
-        return jsonify(response), 404
+    err = check_if_author_exists(tx, data["author_id"])
+    if err:
+        return err
+    # query = "MATCH (a:Author) WHERE ID(a)=$author_id RETURN a{.*, id:ID(a), born:toString(a.born)} as author"
+    # result = tx.run(query, author_id=data["author_id"]).data()
+    # if not result:
+    #     response = {'message': "Author under id %d doesn't exists in database" % (id)}
+    #     return jsonify(response), 404
     query = "MATCH (a:Author)-[r:WRITTEN_BY]-(b:Book) WHERE ID(a)=$author_id AND ID(b)=$id RETURN r"
     result = tx.run(query, author_id=data["author_id"], id=id).data()
     if not result:
@@ -645,9 +614,8 @@ def delete_book_author(tx, data, id):
         return jsonify(response), 404
     query = "MATCH (a:Author)<-[r:WRITTEN_BY]-(b:Book) WHERE ID(a)=$author_id AND ID(b)=$id DELETE r"
     result = tx.run(query, author_id=data["author_id"], id=id).data()
-    if result:
-        response = {'message': "Author under id %d unassineg from book under id %d " % (data["author_id"], id)}
-        return jsonify(response), 200
+    response = {'message': "Author under id %d unassineg from book under id %d " % (data["author_id"], id)}
+    return jsonify(response), 200
 
 @app.route('/book/<int:id>/author', methods=['DELETE'])
 def delete_book_author_route(id):
