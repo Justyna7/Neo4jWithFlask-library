@@ -152,7 +152,7 @@ def add_book(tx, data):
     CREATE (a)<-[:WRITTEN_BY]-(b)-[:RELEASED_BY {release_date:date($release_date)}]->(p) RETURN ID(b) as id"""
     result = tx.run(query, author_id=author_id, ph_id=ph_id, 
         title=data["title"], cover_photo=data["cover_photo"],genres=data["genres"], description=data["description"], number=data["number"],release_date=data["release_date"]  ).data()
-    return jsonify({"Book added under id":result})
+    return jsonify({"Book added under id":result}), 200
         
 def add_book_route():
     err = no_json_error_message(request)
@@ -415,7 +415,7 @@ def add_author(tx, data):
         return jsonify(response), 404
     query = """CREATE (a:Author {name:$name, surname:$surname, born:date($born)}) RETURN ID(a) as id"""
     result = tx.run(query, name=data["name"], surname=data["surname"], born=data["born"]).data()
-    return jsonify({"Author added under id":result})
+    return jsonify({"Author added under id":result}), 200
 
 @app.route('/author', methods=[ 'POST'])
 def add_author_route():
@@ -542,6 +542,21 @@ def edit_author_route(id):
     data["password"] = request.json['password'].encode('ascii')
     with driver.session() as session:
         return session.execute_write(edit_author, data, id)
+
+def delete_author(tx, id):
+    query = "MATCH (a:Author) WHERE ID(a)=$id RETURN a{.*, id:ID(a), born:toString(a.born)} as author"
+    result = tx.run(query, id=id).data()
+    if not result:
+        response = {'message': "Author under id %d doesn't exists in database" % (id)}
+        return jsonify(response), 404
+    query = "MATCH (a:Author)-[r]-(n) WHERE ID(a)=$id RETURN r"
+    result = tx.run(query, id=id).data()
+    if result:
+        response = {'message': "You can't delete author that already has books" % (id)}
+        return jsonify(response), 404
+    query = "DELETE (a:Author) WHERE ID(a)=$id"
+    result = tx.run(query, id=id).data()
+    return jsonify({"message":"Author deleted"}), 200
 
 @app.route('/author/<int:id>', methods=['DELETE'])
 def delete_author_route(id):
