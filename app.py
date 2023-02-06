@@ -628,9 +628,33 @@ def delete_book_author_route(id):
     with driver.session() as session:
         return session.execute_write(delete_book_author, data, id)
 
+
+def add_book_publishing_house(tx, data, id):
+    err = check_admin_credentials(tx, data["login"], data["password"])
+    if err:
+        return err
+    err = check_if_book_exists(tx,id)
+    if err:
+        return err
+    err = check_if_publishing_house_exists(tx, data["publishing_house_id"])
+    """
+    MATCH (p:Publishing_House) WHERE ID(p) = $ph_id WITH a, p
+    CREATE (b:Book {title: $title, cover_photo: $cover_photo, genres:$genres, description:$description, number:$number})
+    CREATE (a)<-[:WRITTEN_BY]-(b)-[:RELEASED_BY {release_date:date($release_date)}]->(p)
+    """
+    query = "MATCH (p:Publishing_House)-[:RELEASED_BY {release_date:date($release_date)}]-(b:Book) WHERE ID(p)=$publishing_house_id AND ID(b)=$id RETURN r"
+    result = tx.run(query, publishing_house_id=data["publishing_house_id"], id=id, release_date=data["release_date"]).data()
+    if result:
+        response = {'message': "Publishing House under id %d and realease date %s already has connection to book under id %d in database" % (data["publishing_house_id"], data["release_date"], id)}
+        return jsonify(response), 404
+    query = "CREATE (p:Publishing_House)<-[:RELEASED_BY {release_date:date($release_date)}]-(b:Book) WHERE ID(p)=$publishing_house_id AND ID(b)=$id"
+    result = tx.run(query, publishing_house_id=data["publishing_house_id"], id=id, release_date=data["release_date"]).data()
+    response = {'message': "Publishing House under id %d and realease date %s assined to book under id %d " % (data["publishing_house_id"], data["release_date"], id)}
+    return jsonify(response), 200
+
 @app.route('/book/<int:id>/publishing_house', methods=['POST'])
 def add_book_publishing_house_route(id):
-    needed_values=["login","password", "publishing_house_id"]
+    needed_values=["login","password", "publishing_house_id", "release_date"]
     err = initiate_request_error_message(request, needed_values)
     if err:
         return err
@@ -639,9 +663,33 @@ def add_book_publishing_house_route(id):
     with driver.session() as session:
         return session.execute_write(add_book_publishing_house, data, id)
 
+
+def delete_book_publishing_house(tx, data, id):
+    err = check_admin_credentials(tx, data["login"], data["password"])
+    if err:
+        return err
+    err = check_if_book_exists(tx,id)
+    if err:
+        return err
+    err = check_if_publishing_house_exists(tx, data["publishing_house_id"])
+    """
+    MATCH (p:Publishing_House) WHERE ID(p) = $ph_id WITH a, p
+    CREATE (b:Book {title: $title, cover_photo: $cover_photo, genres:$genres, description:$description, number:$number})
+    CREATE (a)<-[:WRITTEN_BY]-(b)-[:RELEASED_BY {release_date:date($release_date)}]->(p)
+    """
+    query = "MATCH (p:Publishing_House)-[:RELEASED_BY {release_date:date($release_date)}]-(b:Book) WHERE ID(p)=$publishing_house_id AND ID(b)=$id RETURN r"
+    result = tx.run(query, publishing_house_id=data["publishing_house_id"], id=id, release_date=data["release_date"]).data()
+    if not result:
+        response = {'message': "Publishing House under id %d and realease date %s doesn't have connection to book under id %d in database" % (data["publishing_house_id"], data["release_date"], id)}
+        return jsonify(response), 404
+    query = "MATCH (p:Publishing_House)<-[:RELEASED_BY {release_date:date($release_date)}]-(b:Book) WHERE ID(p)=$publishing_house_id AND ID(b)=$id DELETE r"
+    result = tx.run(query, publishing_house_id=data["publishing_house_id"], id=id, release_date=data["release_date"]).data()
+    response = {'message': "Publishing House under id %d and realease date %s unassined from book under id %d " % (data["publishing_house_id"], data["release_date"], id)}
+    return jsonify(response), 200
+
 @app.route('/book/<int:id>/publishing_house', methods=['DELETE'])
 def delete_book_publishing_house_route(id):
-    needed_values=["login","password", "publishing_house_id"]
+    needed_values=["login","password", "publishing_house_id", "release_date"]
     err = initiate_request_error_message(request, needed_values)
     if err:
         return err
