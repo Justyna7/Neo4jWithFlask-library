@@ -491,7 +491,10 @@ def edit_publishing_house_route(id):
     with driver.session() as session:
         return session.execute_write(edit_publishing_house, data, id)
 
-def delete_publishing_house(tx, id):
+def delete_publishing_house(tx, data, id):
+    err = check_admin_credentials(tx, data["login"], data["password"])
+    if err:
+        return err
     query = "MATCH (p:Publishing_House) WHERE ID(p)=$id RETURN p{.*, id:ID(p)} as `publishing house`"
     result = tx.run(query, id=id).data()
     if not result:
@@ -559,7 +562,10 @@ def edit_author_route(id):
     with driver.session() as session:
         return session.execute_write(edit_author, data, id)
 
-def delete_author(tx, id):
+def delete_author(tx, data, id):
+    err = check_admin_credentials(tx, data["login"], data["password"])
+    if err:
+        return err
     query = "MATCH (a:Author) WHERE ID(a)=$id RETURN a{.*, id:ID(a), born:toString(a.born)} as author"
     result = tx.run(query, id=id).data()
     if not result:
@@ -584,6 +590,30 @@ def delete_author_route(id):
     data["password"] = request.json['password'].encode('ascii')
     with driver.session() as session:
         return session.execute_write(delete_author, data, id)
+    
+def add_book_author(tx, data, id):
+    err = check_admin_credentials(tx, data["login"], data["password"])
+    if err:
+        return err
+    err = check_if_book_exists(tx,id)
+    if err:
+        return err
+    query = "MATCH (a:Author) WHERE ID(a)=$author_id RETURN a{.*, id:ID(a), born:toString(a.born)} as author"
+    result = tx.run(query, author_id=data["author_id"]).data()
+    if not result:
+        response = {'message': "Author under id %d doesn't exists in database" % (id)}
+        return jsonify(response), 404
+    query = "MATCH (a:Author)-[r:WRITTEN_BY]-(b:Book) WHERE ID(a)=$author_id AND ID(b)=$id RETURN r"
+    result = tx.run(query, author_id=data["author_id"], id=id).data()
+    if result:
+        response = {'message': "Author under id %d already has connection to book under id %d in database" % (data["author_id"], id)}
+        return jsonify(response), 404
+    query = "CREATE (a:Author)<-[:WRITTEN_BY]-(b:Book) WHERE ID(a)=$author_id AND ID(b)=$id RETURN r"
+    result = tx.run(query, author_id=data["author_id"], id=id).data()
+    if result:
+        response = {'message': "Author under id %d added to book under id %d " % (data["author_id"], id)}
+        return jsonify(response), 404
+
 
 @app.route('/book/<int:id>/author', methods=['POST'])
 def add_book_author_route(id):
