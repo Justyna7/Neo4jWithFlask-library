@@ -491,6 +491,22 @@ def edit_publishing_house_route(id):
     with driver.session() as session:
         return session.execute_write(edit_publishing_house, data, id)
 
+def delete_publishing_house(tx, id):
+    query = "MATCH (p:Publishing_House) WHERE ID(p)=$id RETURN p{.*, id:ID(p)} as `publishing house`"
+    result = tx.run(query, id=id).data()
+    if not result:
+        response = {'message': "Publishing House under id %d doesn't exists in database" % (id)}
+        return jsonify(response), 404
+    query = "MATCH (p:Publishing_House)-[r]-(n) WHERE ID(p)=$id RETURN r"
+    result = tx.run(query, id=id).data()
+    if result:
+        response = {'message': "You can't delete Publishing House that already has books" % (id)}
+        return jsonify(response), 404
+    query = "DELETE (p:Publishing_House) WHERE ID(p)=$id"
+    result = tx.run(query, id=id).data()
+    return jsonify({"message":"Publishing House deleted"}), 200
+
+
 @app.route('/publishing_house/<int:id>', methods=['DELETE'])
 def delete_publishing_house_route(id):
     needed_values=["login","password"]
