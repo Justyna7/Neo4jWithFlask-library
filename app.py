@@ -611,8 +611,8 @@ def add_book_author(tx, data, id):
     query = "CREATE (a:Author)<-[:WRITTEN_BY]-(b:Book) WHERE ID(a)=$author_id AND ID(b)=$id RETURN r"
     result = tx.run(query, author_id=data["author_id"], id=id).data()
     if result:
-        response = {'message': "Author under id %d added to book under id %d " % (data["author_id"], id)}
-        return jsonify(response), 404
+        response = {'message': "Author under id %d assigned to book under id %d " % (data["author_id"], id)}
+        return jsonify(response), 200
 
 
 @app.route('/book/<int:id>/author', methods=['POST'])
@@ -625,6 +625,29 @@ def add_book_author_route(id):
     data["password"] = request.json['password'].encode('ascii')
     with driver.session() as session:
         return session.execute_write(add_book_author, data, id)
+
+def delete_book_author(tx, data, id):
+    err = check_admin_credentials(tx, data["login"], data["password"])
+    if err:
+        return err
+    err = check_if_book_exists(tx,id)
+    if err:
+        return err
+    query = "MATCH (a:Author) WHERE ID(a)=$author_id RETURN a{.*, id:ID(a), born:toString(a.born)} as author"
+    result = tx.run(query, author_id=data["author_id"]).data()
+    if not result:
+        response = {'message': "Author under id %d doesn't exists in database" % (id)}
+        return jsonify(response), 404
+    query = "MATCH (a:Author)-[r:WRITTEN_BY]-(b:Book) WHERE ID(a)=$author_id AND ID(b)=$id RETURN r"
+    result = tx.run(query, author_id=data["author_id"], id=id).data()
+    if not result:
+        response = {'message': "Author under id %d doesn't have connection to book under id %d in database" % (data["author_id"], id)}
+        return jsonify(response), 404
+    query = "MATCH (a:Author)<-[r:WRITTEN_BY]-(b:Book) WHERE ID(a)=$author_id AND ID(b)=$id DELETE r"
+    result = tx.run(query, author_id=data["author_id"], id=id).data()
+    if result:
+        response = {'message': "Author under id %d unassineg from book under id %d " % (data["author_id"], id)}
+        return jsonify(response), 200
 
 @app.route('/book/<int:id>/author', methods=['DELETE'])
 def delete_book_author_route(id):
