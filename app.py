@@ -952,7 +952,7 @@ def recieve_reservation(tx, data, reservation_id):
     WITH r, apoc.date.currentTimestamp() AS presentInMs
     WITH r, apoc.date.add(presentInMs, "ms", 30, "day") AS deadlineInMs, presentInMs
     WITH r, datetime({epochMillis: presentInMs}) as rec, datetime({epochMillis: deadlineInMs}) AS deadline;
-    SET r.status = "recieved", r.date_of_collection:rec, return_deadline:deadline """
+    SET r.status = "recieved", r.date_of_collection = rec, r.return_deadline = deadline """
     result = tx.run(query,  id_r=reservation_id).data()
     response = {'message': "Book collected" }
     return jsonify(response), 200
@@ -981,7 +981,7 @@ def prolong_reservation(tx, data, reservation_id):
     WITH r, apoc.date.currentTimestamp() AS presentInMs
     WITH r, apoc.date.add(presentInMs, "ms", 30, "day") AS deadlineInMs
     WITH r, datetime({epochMillis: deadlineInMs}) AS deadline;
-    SET r.status = "prolonged", return_deadline:deadline """
+    SET r.status = "prolonged", r.return_deadline = deadline """
     result = tx.run(query,  id_r=reservation_id).data()
     response = {'message': "Book collected" }
     return jsonify(response), 200
@@ -990,6 +990,29 @@ def prolong_reservation(tx, data, reservation_id):
 def prolong_reservation_route(reservation_id):
     needed_values=["login","password"]
     return initiate_request_with_id(needed_values, request, prolong_reservation, reservation_id)   
+
+
+def return_reservation(tx, data, reservation_id):
+    err = check_admin_credentials(tx, data["login"], data["password"])
+    if err:
+        return err
+    query = """MATCH (:User)-[r:RESERVATION]-(:Book) WHERE ID(r)= $id_r RETURN r.status as status"""
+    result = tx.run(query,  id_r=reservation_id).data()
+    if not result:
+        response = {'message': "Reservation uder id %d doesn't exist" %(reservation_id) }
+        return jsonify(response), 404
+    # check if it has "ready for collection" status
+    if not(result[0]["status"] == "recieved" or result[0]["status"] == "prolonged" ):
+        response = {'message': "You can only return books that are with the user" }
+        return jsonify(response), 404
+    # prolong book
+    query = """MATCH (:User)-[r:RESERVATION]-(:Book) WHERE ID(r)= $id_r
+    WITH r, apoc.date.currentTimestamp() AS presentInMs
+    WITH r, datetime({epochMillis: presentInMs}) AS pres;
+    SET r.status = "returned", r.date_of_return = pres, r.active = False"""
+    result = tx.run(query,  id_r=reservation_id).data()
+    response = {'message': "Book collected" }
+    return jsonify(response), 200
 
 @app.route('/reservation/<int:reservation_id>/return', methods=['PUT'])
 def return_reservation_route(reservation_id):
