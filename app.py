@@ -88,6 +88,22 @@ def add_user_route():
     #     return session.execute_write(add_user, data)
 
 
+def edit_user(tx, data):
+    login = data["login"]
+    err = check_credentials(login, data["password"])
+    if err:
+        return err
+    password = data["new_pass"]
+    query = "MATCH (u:User {login: $login}) SET u.password=$password RETURN u, ID(u) as id"
+    passw = bcrypt.hashpw(password, bcrypt.gensalt()).decode('ascii')
+    result = tx.run(query, login=login, password = passw).data()
+    return parse_person(result[0], "u")
+
+@app.route('/users', methods=['PUT'])        
+def edit_user_route():
+    needed_values = ["login","password", "new_pass"]
+    return initiate_request(needed_values, request, edit_user)
+
 def parse_book(result):
     print(result)
     json_dict = result['b']
@@ -519,6 +535,22 @@ def add_admin_route():
     with driver.session() as session:
         return session.execute_write(add_admin, login, password)
 
+
+def edit_admin(tx, data):
+    login = data["login"]
+    err = check_admin_credentials(login, data["password"])
+    if err:
+        return err
+    password = data["new_pass"]
+    query = "MATCH (a:Admin {login: $login}) SET a.password=$password RETURN a, ID(a) as id"
+    passw = bcrypt.hashpw(password, bcrypt.gensalt()).decode('ascii')
+    result = tx.run(query, login=login, password = passw).data()
+    return parse_person(result[0], "a")
+
+@app.route('/users', methods=['PUT'])        
+def edit_admin_route():
+    needed_values = ["login","password", "new_pass"]
+    return initiate_request(needed_values, request, edit_admin)
 
 def add_author(tx, data):
     err = check_admin_credentials(tx, data["login"], data["password"])
