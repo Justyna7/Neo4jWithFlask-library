@@ -641,7 +641,7 @@ def delete_book_author(tx, data, id):
         return jsonify(response), 404
     query = "MATCH (a:Author)<-[r:WRITTEN_BY]-(b:Book) WHERE ID(a)=$author_id AND ID(b)=$id DELETE r"
     result = tx.run(query, author_id=data["author_id"], id=id).data()
-    response = {'message': "Author under id %d unassineg from book under id %d " % (data["author_id"], id)}
+    response = {'message': "Author under id %d unassined from book under id %d " % (data["author_id"], id)}
     return jsonify(response), 200
 
 @app.route('/book/<int:id>/author', methods=['DELETE'])
@@ -709,10 +709,18 @@ def make_reservation(tx, data, id):
     if err:
         return err
     # check if no other *active* reservations on the same book from the same user
-    query = "" # add reservation
+    query = "MATCH (u:User)-[r:RESERVATION]-(b:Book) WHERE u.login = $login AND ID(b) = $id AND r.active = True RETURN r"
+    result = tx.run(query, login=data["login"], id=id).data()
+    if result:
+        response = {'message': "You have either reserved or borrowed this book already. Finish previous reservation process before starting new one." }
+    # add reservation
+    query = """MATCH (u:User) WHERE u.login = $login WHITH u MATCH (b:Book) WHERE ID(b) = $id  
+        CREATE (u:User)-[:RESERVATION { status:"unconfirmed", date_of_collection:Null, 
+        return_deadline:Null, date_of_return:Null, active:True, waiting_list: Null }]-(b:Book)"""
     result = tx.run(query, login=data["login"], id=id).data()
     response = {'message': "Book reservation process initialized. Confirm to proceed"}
     return jsonify(response), 200
+
 
 @app.route('/book/<int:id>/reserve', methods=['POST'])
 def make_reservation_route(id):
@@ -722,7 +730,9 @@ def make_reservation_route(id):
 def get_reservation_history(tx, data, id):
     err = check_credentials(tx, data["login"], data["password"])
     if err:
-        return err
+        err = check_admin_credentials(tx, data["login"], data["password"])
+        if err:
+            return err
     query = ""
     if data["active"]:
         query = "" # get all active reservations from user sorted by date
