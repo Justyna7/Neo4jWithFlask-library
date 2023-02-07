@@ -874,22 +874,24 @@ def cancel_reservation_admin(tx, data, reservation_id):
     if not(result[0]["status"] == "unconfirmed" or result[0]["status"] == "on waiting list" or result[0]["status"] == "ready for collection"):
         response = {'message': "You can only cancel reservations that hadn't been recieved yet or canceled" }
         return jsonify(response), 404
+    # cancel reservation
     query = """MATCH (:User)-[r:RESERVATION]-(:Book) WHERE ID(r)= $id_r SET r.status = "canceled", r.active = False """
     result = tx.run(query,  id_r=reservation_id).data()
     response = {'message': "Reservation canceled" }
     return jsonify(response), 200
-    # cancel reservation
+    
 
 @app.route('/reservation/<int:reservation_id>/cancel', methods=['DELETE'])
 def cancel_reservation_admin_route(reservation_id):
     needed_values=["login","password"]
-    err = initiate_request_error_message(request, needed_values)
-    if err:
-        return err
-    data = {x:request.json[x] for x in needed_values if x!="password"}
-    data["password"] = request.json['password'].encode('ascii')
-    with driver.session() as session:
-        return session.execute_write(cancel_reservation_admin, data, reservation_id)
+    return initiate_request_with_id(needed_values, request, cancel_reservation_admin, reservation_id)
+    # err = initiate_request_error_message(request, needed_values)
+    # if err:
+    #     return err
+    # data = {x:request.json[x] for x in needed_values if x!="password"}
+    # data["password"] = request.json['password'].encode('ascii')
+    # with driver.session() as session:
+    #     return session.execute_write(cancel_reservation_admin, data, reservation_id)
     
 
 def confirm_reservation(tx, data, id, reservation_id):
@@ -919,16 +921,35 @@ def confirm_reservation(tx, data, id, reservation_id):
     response = {'message': "Reservation confirmed" }
     return jsonify(response), 200
 
-@app.route('/user/<int:id>/reservation/<int:reservation_id>/confirm', methods=['PUT'])
-def confirm_reservation_route(id, reservation_id):
-    needed_values=["login","password"]
-    err = initiate_request_error_message(request, needed_values)
+
+def recieve_reservation(tx, data, reservation_id):
+    err = check_admin_credentials(tx, data["login"], data["password"])
     if err:
         return err
-    data = {x:request.json[x] for x in needed_values if x!="password"}
-    data["password"] = request.json['password'].encode('ascii')
-    with driver.session() as session:
-        return session.execute_write(confirm_reservation, data, id, reservation_id)
+    query = """MATCH (:User)-[r:RESERVATION]-(:Book) WHERE ID(r)= $id_r RETURN r.status as status"""
+    result = tx.run(query,  id_r=reservation_id).data()
+    if not result:
+        response = {'message': "Reservation uder id %d doesn't exist" %(reservation_id) }
+        return jsonify(response), 404
+    # check if it has "ready for collection" status
+    if not(result[0]["status"] == "ready for collection"):
+        response = {'message': "You can give books that are in the library to users" }
+        return jsonify(response), 404
+    # give book to user
+    query = """MATCH (:User)-[r:RESERVATION]-(:Book) WHERE ID(r)= $id_r
+    WITH r, apoc.date.currentTimestamp() AS presentInMs
+    WITH r, apoc.date.add(presentInMs, "ms", 30, "day") AS deadlineInMs, presentInMs
+    WITH r, datetime({epochMillis: presentInMs}) as rec, datetime({epochMillis: deadlineInMs}) AS deadline;
+    SET r.status = "recieved", r.date_of_collection:rec, return_deadline:deadline """
+    result = tx.run(query,  id_r=reservation_id).data()
+    response = {'message': "Book collected" }
+    return jsonify(response), 200
+
+@app.route('/reservation/<int:reservation_id>/recieve', methods=['PUT'])
+def recieve_reservation_route(reservation_id):
+    needed_values=["login","password"]
+    return initiate_request_with_id(needed_values, request, recieve_reservation, reservation_id)
+    
     
 
 
