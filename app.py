@@ -160,7 +160,7 @@ def get_books(tx, query, data):
 def get_books_route():
     data = {"title":"", "name":"", "surname":"","genres":"", "sort":""}
     genres = ""
-    sort = "ORDER BY a IS NOT NULL DESC"
+    sort = "ORDER BY a IS NOT NULL DESC "
     if request.data != b'':
         json_dict = request.get_json(force=True)
         # data = ["title", "name", "surname","genres"]
@@ -168,9 +168,9 @@ def get_books_route():
         if data['genres'] != "":
             genres = "AND ANY(genre IN $genres WHERE genre IN b.genres)"
         if data['sort'] == "alphabet":
-            sort = "ORDER BY b.title DESC"
+            sort = "ORDER BY b.title "
         if data['sort'] == "new":
-            sort = "ORDER BY published[0].release_date IS NOT NULL DESC"
+            sort = "ORDER BY published[0].release_date IS NOT NULL DESC "
     print(data)
     with driver.session() as session:
         query = "MATCH (b:Book) WHERE tolower(b.title) CONTAINS tolower($title) " + genres + """WITH b 
@@ -333,28 +333,91 @@ def add_comment_route(id):
     else:
         with driver.session() as session:
             return session.execute_write(add_annonymus_comment, comment, id)
+        
+def edit_comment(tx, data, comment_id):
+    err = check_credentials(data["login"], data["password"])
+    if err:
+        return err
+    query = """MATCH (u:User {login: $login})-[c:COMMENTED_ON]-(:Book) WHERE ID(c)=$id 
+            RETURN c.comment as comment, ID(c) as id, u.login as login"""
+    result = tx.run(query, login=data["login"], id=comment_id).data()
+    if not result:
+        return jsonify({"Message":"Comment doesn't exist"}), 404
+    query = """MATCH (u:User {login: $login})-[c:COMMENTED_ON]-(:Book) WHERE ID(c)=$id
+            SET c.comment=$comment
+            RETURN c.comment as comment, ID(c) as id, u.login as login"""
+    result = tx.run(query, login=data["login"], id=comment_id, comment=data["comment"]).data()
+    return result[0]
+
+def edit_comment_admin(tx, data, comment_id):
+    err = check_admin_credentials(data["login"], data["password"])
+    if err:
+        return err
+    query = """MATCH (n)-[c:COMMENTED_ON]-(:Book) WHERE ID(c)=$id 
+            RETURN c.comment as comment, ID(c) as id"""
+    result = tx.run(query, id=comment_id).data()
+    if not result:
+        return jsonify({"Message":"Comment doesn't exist"}), 404
+    query = """MATCH (n)-[c:COMMENTED_ON]-(:Book) WHERE ID(c)=$id
+            SET c.comment=$comment
+            RETURN c.comment as comment, ID(c) as id"""
+    result = tx.run(query, id=comment_id, comment=data["comment"]).data()
+    return result[0]
 
 @app.route('/book/<int:id>/comment/<int:comment_id>', methods=['PUT'])
 def edit_comment_route(id, comment_id):
     needed_values=["login","password","comment"]
-    err = initiate_request_error_message(request, needed_values)
+    return initiate_request_with_id(needed_values, request, edit_comment, comment_id)
+
+@app.route('/admin/book/<int:id>/comment/<int:comment_id>', methods=['PUT'])
+def edit_comment_route(id, comment_id):
+    needed_values=["login","password","comment"]
+    return initiate_request_with_id(needed_values, request, edit_comment_admin, comment_id)
+
+def delete_comment(tx, data, comment_id):
+    err = check_credentials(data["login"], data["password"])
     if err:
         return err
-    data = {x:request.json[x] for x in needed_values if x!="password"}
-    data["password"] = request.json['password'].encode('ascii')
-    with driver.session() as session:
-        return session.execute_write(edit_comment, data, id, comment_id)
+    query = """MATCH (u:User {login: $login})-[c:COMMENTED_ON]-(:Book) WHERE ID(c)=$id 
+            RETURN c.comment as comment, ID(c) as id, u.login as login"""
+    result = tx.run(query, login=data["login"], id=comment_id).data()
+    if not result:
+        return jsonify({"Message":"Comment doesn't exist"}), 404
+    query = """MATCH (u:User {login: $login})-[c:COMMENTED_ON]-(:Book) WHERE ID(c)=$id DELETE c"""
+    result = tx.run(query, login=data["login"], id=comment_id).data()
+    return jsonify({"Message":"Comment deleted"}), 200
+
+def delete_comment_admin(tx, data, comment_id):
+    err = check_admin_credentials(data["login"], data["password"])
+    if err:
+        return err
+    query = """MATCH (n)-[c:COMMENTED_ON]-(:Book) WHERE ID(c)=$id 
+            RETURN c.comment as comment, ID(c) as id"""
+    result = tx.run(query, id=comment_id).data()
+    if not result:
+        return jsonify({"Message":"Comment doesn't exist"}), 404
+    query = """MATCH (n)-[c:COMMENTED_ON]-(:Book) WHERE ID(c)=$id DELETE c"""
+    result = tx.run(query, id=comment_id).data()
+    return jsonify({"Message":"Comment deleted"}), 200
+
     
 @app.route('/book/<int:id>/comment/<int:comment_id>', methods=['DELETE'])
 def delete_comment_route(id, comment_id):    
     needed_values=["login","password"]
-    err = initiate_request_error_message(request, needed_values)
-    if err:
-        return err
-    data = {x:request.json[x] for x in needed_values if x!="password"}
-    data["password"] = request.json['password'].encode('ascii')
-    with driver.session() as session:
-        return session.execute_write(delete_comment, data, id, comment_id)
+    return initiate_request_with_id(needed_values, request, delete_comment, comment_id)
+
+@app.route('admin/book/<int:id>/comment/<int:comment_id>', methods=['DELETE'])
+def delete_comment_route(id, comment_id):    
+    needed_values=["login","password"]
+    return initiate_request_with_id(needed_values, request, delete_comment_admin, comment_id)
+
+    # err = initiate_request_error_message(request, needed_values)
+    # if err:
+    #     return err
+    # data = {x:request.json[x] for x in needed_values if x!="password"}
+    # data["password"] = request.json['password'].encode('ascii')
+    # with driver.session() as session:
+    #     return session.execute_write(delete_comment, data, comment_id)
 
 
 def add_rating(tx, login, password, rating, book_id):
