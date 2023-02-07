@@ -890,12 +890,12 @@ def get_reservation_history(tx, data, id):
             return err
     query = ""
     if data["active"]:
-        query = "" # get all active reservations from user sorted by date
+        query = "MATCH (u:User)-[r:RESERVATION]-(b:Book) WHERE ID(u) = $id AND r.active=True RETURN r{.*, date_of_collection:toString(r.date_of_collection), return_deadline:toString(r.return_deadline), date_of_return:toString(date_of_return)}, b" # get all active reservations from user sorted by date
     else:
-        query = "" # get all reservations from user sorted by date
+        query = "MATCH (u:User)-[r:RESERVATION]-(b:Book) WHERE ID(u) = $id  RETURN r{.*, date_of_collection:toString(r.date_of_collection), return_deadline:toString(r.return_deadline), date_of_return:toString(date_of_return)}, b" # get all reservations from user sorted by date
     result = tx.run(query, id=id).data()
-    response = {'message': "Book reservation process initialized. Confirm to proceed"}
-    return jsonify(response), 200
+    
+    return jsonify(result), 200
 
 @app.route('/user/<int:id>/reservation_history', methods=['GET'])
 def get_reservation_history_route(id):
