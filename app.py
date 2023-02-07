@@ -449,7 +449,7 @@ def edit_comment_route(id, comment_id):
     return initiate_request_with_id(needed_values, request, edit_comment, comment_id)
 
 @app.route('/admin/book/<int:id>/comment/<int:comment_id>', methods=['PUT'])
-def edit_comment_route(id, comment_id):
+def edit_comment_admin_route(id, comment_id):
     needed_values=["login","password","comment"]
     return initiate_request_with_id(needed_values, request, edit_comment_admin, comment_id)
 
@@ -485,8 +485,8 @@ def delete_comment_route(id, comment_id):
     needed_values=["login","password"]
     return initiate_request_with_id(needed_values, request, delete_comment, comment_id)
 
-@app.route('admin/book/<int:id>/comment/<int:comment_id>', methods=['DELETE'])
-def delete_comment_route(id, comment_id):    
+@app.route('/admin/book/<int:id>/comment/<int:comment_id>', methods=['DELETE'])
+def delete_comment_admin_route(id, comment_id):    
     needed_values=["login","password"]
     return initiate_request_with_id(needed_values, request, delete_comment_admin, comment_id)
 
