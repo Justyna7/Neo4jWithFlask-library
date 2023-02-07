@@ -756,6 +756,7 @@ def get_reservation_history_route(id):
     with driver.session() as session:
         return session.execute_read(get_reservation_history, data, id)
 
+
 def cancel_reservation_user(tx, data, id, reservation_id):
     err = check_credentials(tx, data["login"], data["password"])
     if err:
@@ -782,10 +783,7 @@ def cancel_reservation_user(tx, data, id, reservation_id):
     result = tx.run(query, id_u=id, id_r=reservation_id).data()
     response = {'message': "Reservation canceled" }
     return jsonify(response), 200
-    
-    
-    
-    
+       
 @app.route('/user/<int:id>/reservation/<int:reservation_id>/cancel', methods=['DELETE'])
 def cancel_reservation_user_route(id, reservation_id):
     needed_values=["login","password"]
@@ -798,13 +796,30 @@ def cancel_reservation_user_route(id, reservation_id):
         return session.execute_write(cancel_reservation_user, data, id, reservation_id)
     
 
-def cancel_reservation_admin(tx, data, id, reservation_id):
+def cancel_reservation_admin(tx, data, reservation_id):
     err = check_admin_credentials(tx, data["login"], data["password"])
     if err:
         return err
     # check if user exist
+    # query = "MATCH (u:User) WHERE ID(u) = $id RETURN u"
+    # result = tx.run(query, login=data["login"], id=id).data()
+    # if not result:
+    #     response = {'message': "User doesn't exist" }
+    #     return jsonify(response), 403
     # check if reservation exists and comes from the correct person
+    query = """MATCH (:User)-[r:RESERVATION]-(:Book) WHERE ID(r)= $id_r RETURN r.status as status"""
+    result = tx.run(query,  id_r=reservation_id).data()
+    if not result:
+        response = {'message': "Reservation uder id %d doesn't exist" %(reservation_id) }
+        return jsonify(response), 404
     # check if it has either "On waiting list" status or "ready for collection" status
+    if not(result[0]["status"] == "unconfirmed" or result[0]["status"] == "on waiting list" or result[0]["status"] == "ready for collection"):
+        response = {'message': "You can only cancel reservations that hadn't been recieved yet or canceled" }
+        return jsonify(response), 404
+    query = """MATCH (:User)-[r:RESERVATION]-(:Book) WHERE ID(r)= $id_r SET r.status = "canceled", r.active = False """
+    result = tx.run(query,  id_r=reservation_id).data()
+    response = {'message': "Reservation canceled" }
+    return jsonify(response), 200
     # cancel reservation
 
 @app.route('/reservation/<int:reservation_id>/cancel', methods=['DELETE'])
