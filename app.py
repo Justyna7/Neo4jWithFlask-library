@@ -673,6 +673,20 @@ def delete_book_publishing_house_route(id):
     needed_values=["login","password", "publishing_house_id", "release_date"]
     return initiate_request_with_id(needed_values, request, delete_book_publishing_house, id)
 
+def make_reservation(tx, data, id):
+    err = check_credentials(tx, data["login"], data["password"])
+    if err:
+        return err
+    err = check_if_book_exists(id)
+    if err:
+        return err
+    #check if no other *active* reservations on the same book
+    query = "" # add reservation
+    result = tx.run(query, login=data["login"], id=id).data()
+    response = {'message': "Book reservation process initialized. Accept to proceed"}
+    return jsonify(response), 200
+    
+
 
 @app.route('/book/<int:id>/reserve', methods=['POST'])
 def make_reservation_route(id):
