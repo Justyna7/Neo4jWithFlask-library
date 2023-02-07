@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, json
+from flask import  jsonify, request
 import bcrypt
 
 def error_message(json_dict, values):
@@ -17,7 +17,6 @@ def initiate_request_error_message(request, needed_values):
     if err:
         return err
     json_dict = request.get_json(force=True)
-    # needed_values=["login","password"]
     err = error_message(json_dict, needed_values)
     if err:
         return err
