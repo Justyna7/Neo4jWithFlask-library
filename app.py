@@ -76,16 +76,6 @@ def add_user(tx, data):
 def add_user_route():
     needed_values = ["login","password"]
     return initiate_request(needed_values, request, add_user)
-    # err = no_json_error_message(request)
-    # if err:
-    #     return err
-    # err = error_message(request.get_json(force=True), ["login","password"])
-    # if err:
-    #     return err
-    # login = request.json['login']
-    # password = request.json['password'].encode('ascii')
-    # with driver.session() as session:
-    #     return session.execute_write(add_user, data)
 
 
 def edit_user(tx, data):
@@ -202,7 +192,80 @@ def get_books_route():
     response = {'books': books}
     return jsonify(response)
 
+def get_books_rating(tx, sort):
+    query = """MATCH (b:Book) WITH b 
+            MATCH (p:Publishing_House)-[r]-(b)--(a:Author) 
+            WITH collect(distinct(a{.*, born: toString(a.born)})) as authors, 
+            collect(distinct(p{publishing_house:p.name, release_date:toString(r.release_date) })) as published, b
 
+            OPTIONAL MATCH (b)-[r1:RATED]-(u:User) WITH b,r1,u, authors, published
+            OPTIONAL MATCH (b)-[r2:RATED]-(a2:Anonymus) WITH [r1]+ [r2] as ratings, b, authors, published
+            UNWIND  ratings as rates 
+            WITH DISTINCT rates as  ratings, b, authors, published
+
+            OPTIONAL MATCH (b)-[c1:COMMENTED_ON]-(u:User) WITH b,c1,u, authors, published, ratings
+            OPTIONAL MATCH (b)-[c2:COMMENTED_ON]-(a2:Anonymus) WITH [c1]+ [c2] as comments, b, authors, published, ratings
+            UNWIND  comments as c
+            WITH DISTINCT c as comments, b, authors, published, ratings
+
+            OPTIONAL MATCH (b)-[r:RESERVATION]-(u:User) WITH b,r,u, authors, published, ratings, comments
+            WITH DISTINCT r as reservations, b, authors, published, ratings, comments
+
+            WITH b, avg(ratings.rating) as a, authors, published, count(comments) as c, count(reservations) as r 
+            """ + sort + "RETURN b{.*, average_rating:a, comments:c, reservations:r},authors, published LIMIT 10"
+    results = tx.run(query).data()
+    books = [parse_book(result) for result in results]
+    return books
+
+@app.route('/ranking/books/rating', methods=['GET'])
+def ranking_books_highest_rating_route():
+    sort = "ORDER BY a IS NOT NULL DESC "
+    with driver.session() as session:
+        return session.execute_read(get_books_rating, sort)
+
+@app.route('/ranking/books/comments', methods=['GET'])
+def ranking_books_most_commented_route():
+    sort = "ORDER BY c "
+    with driver.session() as session:
+        return session.execute_read(get_books_rating, sort)
+
+@app.route('/ranking/books/borrowed', methods=['GET'])
+def ranking_books_most_borrowed_route():
+    sort = "ORDER BY r "
+    with driver.session() as session:
+        return session.execute_read(get_books_rating, sort)
+    
+
+def get_authors_rating(tx, sort):
+    query = """
+        MATCH(a:Author) WITH a MATCH (a)--(b:Book) WITH a, b
+        OPTIONAL MATCH (b)-[r1:RATED]-(u:User) WITH b,r1,u, a
+        OPTIONAL MATCH (b)-[r2:RATED]-(a2:Anonymus) WITH [r1]+ [r2] as ratings, b, a
+        UNWIND  ratings as rates 
+        WITH DISTINCT rates as  ratings, b, a
+        OPTIONAL MATCH (b)-[c1:COMMENTED_ON]-(u:User) WITH b,c1,u, a, ratings
+        OPTIONAL MATCH (b)-[c2:COMMENTED_ON]-(a2:Anonymus) WITH [c1]+ [c2] as comments, b, a, ratings
+        UNWIND  comments as c
+        WITH DISTINCT c as comments, b, a, ratings
+        OPTIONAL MATCH (b)-[r:RESERVATION]-(u:User) WITH b,r,u,a, ratings, comments
+        WITH DISTINCT r as reservations, b, a as author, ratings, comments
+
+        WITH b, avg(ratings.rating) as a, author, count(comments) as c, count(reservations) as r 
+        WITH b{title:b.title, average_rating:a, comments:c, reservations:r} as book, author
+
+        WITH author, count(book) as b, collect(book) as books
+        WITH author, books,  b"""+ sort + """
+        RETURN author{.*, books:b, born: toString(born)} LIMIT 10""" 
+    results = tx.run(query).data()
+    #books = [(result) for result in results]
+    return results
+
+@app.route('/ranking/authors/numbooks', methods=['GET'])
+def ranking_authors_number_of_books_route():
+    sort = "ORDER by b DESC"
+    with driver.session() as session:
+        return session.execute_read(get_authors_rating, sort)
+    
 def get_book(tx, query, id):
     err = check_if_book_exists(tx, id)
     if err:
@@ -426,14 +489,6 @@ def delete_comment_route(id, comment_id):
 def delete_comment_route(id, comment_id):    
     needed_values=["login","password"]
     return initiate_request_with_id(needed_values, request, delete_comment_admin, comment_id)
-
-    # err = initiate_request_error_message(request, needed_values)
-    # if err:
-    #     return err
-    # data = {x:request.json[x] for x in needed_values if x!="password"}
-    # data["password"] = request.json['password'].encode('ascii')
-    # with driver.session() as session:
-    #     return session.execute_write(delete_comment, data, comment_id)
 
 
 def add_rating(tx, login, password, rating, book_id):
@@ -917,13 +972,6 @@ def cancel_reservation_admin(tx, data, reservation_id):
 def cancel_reservation_admin_route(reservation_id):
     needed_values=["login","password"]
     return initiate_request_with_id(needed_values, request, cancel_reservation_admin, reservation_id)
-    # err = initiate_request_error_message(request, needed_values)
-    # if err:
-    #     return err
-    # data = {x:request.json[x] for x in needed_values if x!="password"}
-    # data["password"] = request.json['password'].encode('ascii')
-    # with driver.session() as session:
-    #     return session.execute_write(cancel_reservation_admin, data, reservation_id)
     
 
 def confirm_reservation(tx, data, id, reservation_id):
