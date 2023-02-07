@@ -14,6 +14,7 @@ password = os.getenv("PASSWORD")
 driver = GraphDatabase.driver(uri, auth=(user, password),database="neo4j")
 
 def initiate_request(needed_values, request, f):
+    print("intiate without id")
     err = initiate_request_error_message(request, needed_values)
     if err:
         return err
@@ -23,6 +24,7 @@ def initiate_request(needed_values, request, f):
         return session.execute_write(f, data)
 
 def initiate_request_with_id(needed_values, request, f, id):
+    print("intiate with id", id)
     err = initiate_request_error_message(request, needed_values)
     if err:
         return err
@@ -705,7 +707,7 @@ def make_reservation(tx, data, id):
     err = check_credentials(tx, data["login"], data["password"])
     if err:
         return err
-    err = check_if_book_exists(id)
+    err = check_if_book_exists(tx, id)
     if err:
         return err
     # check if no other *active* reservations on the same book from the same user
@@ -713,10 +715,11 @@ def make_reservation(tx, data, id):
     result = tx.run(query, login=data["login"], id=id).data()
     if result:
         response = {'message': "You have either reserved or borrowed this book already. Finish previous reservation process before starting new one." }
+        return jsonify(response), 403
     # add reservation
-    query = """MATCH (u:User) WHERE u.login = $login WHITH u MATCH (b:Book) WHERE ID(b) = $id  
-        CREATE (u:User)-[:RESERVATION { status:"unconfirmed", date_of_collection:Null, 
-        return_deadline:Null, date_of_return:Null, active:True, waiting_list: Null }]-(b:Book)"""
+    query = """MATCH (u:User) WHERE u.login = $login WITH u MATCH (b:Book) WHERE ID(b) = $id  
+        CREATE (u)-[:RESERVATION { status:"unconfirmed", date_of_collection:Null, 
+        return_deadline:Null, date_of_return:Null, active:True, waiting_list: Null }]->(b)"""
     result = tx.run(query, login=data["login"], id=id).data()
     response = {'message': "Book reservation process initialized. Confirm to proceed"}
     return jsonify(response), 200
@@ -754,13 +757,34 @@ def get_reservation_history_route(id):
         return session.execute_read(get_reservation_history, data, id)
 
 def cancel_reservation_user(tx, data, id, reservation_id):
-    # check if login and id come from the same person
     err = check_credentials(tx, data["login"], data["password"])
     if err:
         return err
+    # check if login and id come from the same person
+    query = "MATCH (u:User) WHERE u.login = $login AND ID(u) = $id RETURN u"
+    result = tx.run(query, login=data["login"], id=id).data()
+    if not result:
+        response = {'message': "You have to rights to cancel this reservation" }
+        return jsonify(response), 403
     # check if reservation exists
+    query = """MATCH (u:User)-[r:RESERVATION]-(:Book) WHERE ID(u) = $id_u AND ID(r)= $id_r RETURN r.status as status"""
+    result = tx.run(query, id_u=id, id_r=reservation_id).data()
+    if not result:
+        response = {'message': "Reservation uder id %d doesn't exist" %(reservation_id) }
+        return jsonify(response), 404
+    print(result[0]["status"])
     # check if it has unconfirmed status
+    if result[0]["status"] != "unconfirmed":
+        response = {'message': "You can only cancel unconfirmed reservations" }
+        return jsonify(response), 404
     # cancel reservation
+    query = """MATCH (u:User)-[r:RESERVATION]-(:Book) WHERE ID(u) = $id_u AND ID(r)= $id_r SET r.status = "canceled", r.active = False """
+    result = tx.run(query, id_u=id, id_r=reservation_id).data()
+    response = {'message': "Reservation canceled" }
+    return jsonify(response), 200
+    
+    
+    
     
 @app.route('/user/<int:id>/reservation/<int:reservation_id>/cancel', methods=['DELETE'])
 def cancel_reservation_user_route(id, reservation_id):
