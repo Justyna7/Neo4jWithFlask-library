@@ -158,14 +158,19 @@ def get_books(tx, query, data):
     return books
 
 def get_books_route():
-    data = {"title":"", "name":"", "surname":"","genres":""}
+    data = {"title":"", "name":"", "surname":"","genres":"", "sort":""}
     genres = ""
+    sort = "ORDER BY a IS NOT NULL DESC"
     if request.data != b'':
         json_dict = request.get_json(force=True)
         # data = ["title", "name", "surname","genres"]
         data = {x:request.json[x] if x in json_dict else "" for x in data}
         if data['genres'] != "":
             genres = "AND ANY(genre IN $genres WHERE genre IN b.genres)"
+        if data['sort'] == "alphabet":
+            sort = "ORDER BY b.title DESC"
+        if data['sort'] == "new":
+            sort = "ORDER BY published[0].release_date IS NOT NULL DESC"
     print(data)
     with driver.session() as session:
         query = "MATCH (b:Book) WHERE tolower(b.title) CONTAINS tolower($title) " + genres + """WITH b 
@@ -176,10 +181,7 @@ def get_books_route():
             OPTIONAL MATCH (b)-[r1:RATED]-(u:User) WITH b,r1,u, authors, published
             OPTIONAL MATCH (b)-[r2:RATED]-(a2:Anonymus) WITH [r1]+ [r2] as ratings, b, authors, published
             UNWIND  ratings as rates WITH DISTINCT rates as  ratings, b, authors, published
-            WITH b, avg(ratings.rating) as a, authors, published
-            ORDER BY a IS NOT NULL DESC
-            RETURN b{.*, average_rating:a},authors, published 
-        """
+            WITH b, avg(ratings.rating) as a, authors, published """ + sort + "RETURN b{.*, average_rating:a},authors, published "
         books = session.execute_read(get_books, query, data)
     response = {'books': books}
     return jsonify(response)
