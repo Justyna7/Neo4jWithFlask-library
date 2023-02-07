@@ -680,7 +680,7 @@ def make_reservation(tx, data, id):
     err = check_if_book_exists(id)
     if err:
         return err
-    #check if no other *active* reservations on the same book from the same user
+    # check if no other *active* reservations on the same book from the same user
     query = "" # add reservation
     result = tx.run(query, login=data["login"], id=id).data()
     response = {'message': "Book reservation process initialized. Confirm to proceed"}
@@ -704,7 +704,6 @@ def get_reservation_history(tx, data, id):
     response = {'message': "Book reservation process initialized. Confirm to proceed"}
     return jsonify(response), 200
 
-
 @app.route('/user/<int:id>/reservation_history', methods=['GET'])
 def get_reservation_history_route(id):
     needed_values=["login","password", "active"]
@@ -716,6 +715,14 @@ def get_reservation_history_route(id):
     with driver.session() as session:
         return session.execute_read(get_reservation_history, data, id)
 
+def cancel_reservation_user(tx, data, id, reservation_id):
+    # check if login and id come from the same person
+    err = check_credentials(tx, data["login"], data["password"])
+    if err:
+        return err
+    # check if reservation exists
+    # check if it has unconfirmed status
+    # cancel reservation
     
 @app.route('/user/<int:id>/reservation/<int:reservation_id>/cancel', methods=['DELETE'])
 def cancel_reservation_user_route(id, reservation_id):
@@ -728,6 +735,16 @@ def cancel_reservation_user_route(id, reservation_id):
     with driver.session() as session:
         return session.execute_write(cancel_reservation_user, data, id, reservation_id)
     
+
+def cancel_reservation_admin(tx, data, id, reservation_id):
+    err = check_admin_credentials(tx, data["login"], data["password"])
+    if err:
+        return err
+    # check if user exist
+    # check if reservation exists and comes from the correct person
+    # check if it has either "On waiting list" status or "ready for collection" status
+    # cancel reservation
+
 @app.route('/reservation/<int:reservation_id>/cancel', methods=['DELETE'])
 def cancel_reservation_admin_route(reservation_id):
     needed_values=["login","password"]
