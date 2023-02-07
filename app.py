@@ -1028,11 +1028,11 @@ def recieve_reservation(tx, data, reservation_id):
         response = {'message': "You can only give books that are in the library to users" }
         return jsonify(response), 404
     # give book to user
-    query = """MATCH (:User)-[r:RESERVATION]-(:Book) WHERE ID(r)= $id_r
+    query = """MATCH (:User)-[r:RESERVATION]-(:Book) WHERE ID(r)=$id_r
     WITH r, apoc.date.currentTimestamp() AS presentInMs
     WITH r, apoc.date.add(presentInMs, "ms", 30, "day") AS deadlineInMs, presentInMs
-    WITH r, datetime({epochMillis: presentInMs}) as rec, datetime({epochMillis: deadlineInMs}) AS deadline;
-    SET r.status = "recieved", r.date_of_collection = rec, r.return_deadline = deadline """
+    WITH r, datetime({epochMillis: presentInMs}) as rec, datetime({epochMillis: deadlineInMs}) AS deadline
+    SET r.status = "recieved" SET r.date_of_collection = rec SET r.return_deadline = deadline """
     result = tx.run(query,  id_r=reservation_id).data()
     response = {'message': "Book collected" }
     return jsonify(response), 200
@@ -1060,7 +1060,7 @@ def prolong_reservation(tx, data, reservation_id):
     query = """MATCH (:User)-[r:RESERVATION]-(:Book) WHERE ID(r)= $id_r
     WITH r, apoc.date.currentTimestamp() AS presentInMs
     WITH r, apoc.date.add(presentInMs, "ms", 30, "day") AS deadlineInMs
-    WITH r, datetime({epochMillis: deadlineInMs}) AS deadline;
+    WITH r, datetime({epochMillis: deadlineInMs}) AS deadline
     SET r.status = "prolonged", r.return_deadline = deadline """
     result = tx.run(query,  id_r=reservation_id).data()
     response = {'message': "Book collected" }
@@ -1088,7 +1088,7 @@ def return_reservation(tx, data, reservation_id):
     # prolong book
     query = """MATCH (:User)-[r:RESERVATION]-(:Book) WHERE ID(r)= $id_r
     WITH r, apoc.date.currentTimestamp() AS presentInMs
-    WITH r, datetime({epochMillis: presentInMs}) AS pres;
+    WITH r, datetime({epochMillis: presentInMs}) AS pres
     SET r.status = "returned", r.date_of_return = pres, r.active = False"""
     result = tx.run(query,  id_r=reservation_id).data()
     response = {'message': "Book collected" }
