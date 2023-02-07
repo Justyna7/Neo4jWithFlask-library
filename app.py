@@ -310,6 +310,9 @@ def handle_comments_route(id):
         return get_book_comments_route(id)
 
 def add_comment_route(id):
+    err = no_json_error_message(request)
+    if err:
+        return err
     json_dict = request.get_json(force=True)
     err = error_message(json_dict, ["comment"])
     if err:
@@ -326,7 +329,29 @@ def add_comment_route(id):
     else:
         with driver.session() as session:
             return session.execute_write(add_annonymus_comment, comment, id)
-        
+
+@app.route('/book/<int:id>/comment/<int:comment_id>', methods=['PUT'])
+def edit_comment_route(id, comment_id):
+    needed_values=["login","password","comment"]
+    err = initiate_request_error_message(request, needed_values)
+    if err:
+        return err
+    data = {x:request.json[x] for x in needed_values if x!="password"}
+    data["password"] = request.json['password'].encode('ascii')
+    with driver.session() as session:
+        return session.execute_write(edit_comment, data, id, comment_id)
+    
+@app.route('/book/<int:id>/comment/<int:comment_id>', methods=['DELETE'])
+def delete_comment_route(id, comment_id):    
+    needed_values=["login","password"]
+    err = initiate_request_error_message(request, needed_values)
+    if err:
+        return err
+    data = {x:request.json[x] for x in needed_values if x!="password"}
+    data["password"] = request.json['password'].encode('ascii')
+    with driver.session() as session:
+        return session.execute_write(delete_comment, data, id, comment_id)
+
 
 def add_rating(tx, login, password, rating, book_id):
     err = check_credentials(tx, login, password)
@@ -381,6 +406,9 @@ def handle_ratings_route(id):
         return get_book_ratings_route(id)
 
 def add_rating_route(id):
+    err = no_json_error_message(request)
+    if err:
+        return err
     json_dict = request.get_json(force=True)
     err = error_message(json_dict, ["rating"])
     if err:
