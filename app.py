@@ -865,13 +865,6 @@ def cancel_reservation_admin(tx, data, reservation_id):
     err = check_admin_credentials(tx, data["login"], data["password"])
     if err:
         return err
-    # check if user exist
-    # query = "MATCH (u:User) WHERE ID(u) = $id RETURN u"
-    # result = tx.run(query, login=data["login"], id=id).data()
-    # if not result:
-    #     response = {'message': "User doesn't exist" }
-    #     return jsonify(response), 403
-    # check if reservation exists and comes from the correct person
     query = """MATCH (:User)-[r:RESERVATION]-(:Book) WHERE ID(r)= $id_r RETURN r.status as status"""
     result = tx.run(query,  id_r=reservation_id).data()
     if not result:
@@ -898,6 +891,34 @@ def cancel_reservation_admin_route(reservation_id):
     with driver.session() as session:
         return session.execute_write(cancel_reservation_admin, data, reservation_id)
     
+
+def confirm_reservation(tx, data, id, reservation_id):
+    err = check_credentials(tx, data["login"], data["password"])
+    if err:
+        return err
+    # check if login and id come from the same person
+    query = "MATCH (u:User) WHERE u.login = $login AND ID(u) = $id RETURN u"
+    result = tx.run(query, login=data["login"], id=id).data()
+    if not result:
+        response = {'message': "You have to rights to confirm this reservation" }
+        return jsonify(response), 403
+    # check if reservation exists
+    query = """MATCH (u:User)-[r:RESERVATION]-(:Book) WHERE ID(u) = $id_u AND ID(r)= $id_r RETURN r.status as status"""
+    result = tx.run(query, id_u=id, id_r=reservation_id).data()
+    if not result:
+        response = {'message': "Reservation uder id %d doesn't exist" %(reservation_id) }
+        return jsonify(response), 404
+    print(result[0]["status"])
+    # check if it has unconfirmed status
+    if result[0]["status"] != "unconfirmed":
+        response = {'message': "You can only confirm unconfirmed reservations" }
+        return jsonify(response), 404
+    # confirm reservation
+    query = """MATCH (u:User)-[r:RESERVATION]-(:Book) WHERE ID(u) = $id_u AND ID(r)= $id_r SET r.status = "ready for collection" """
+    result = tx.run(query, id_u=id, id_r=reservation_id).data()
+    response = {'message': "Reservation confirmed" }
+    return jsonify(response), 200
+
 @app.route('/user/<int:id>/reservation/<int:reservation_id>/confirm', methods=['PUT'])
 def confirm_reservation_route(id, reservation_id):
     needed_values=["login","password"]
