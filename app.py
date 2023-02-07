@@ -346,9 +346,6 @@ def add_admin_route():
     err = initiate_request_error_message(request, ["login","password"])
     if err:
         return err
-    # err = error_message(request.get_json(force=True), ["login","password"])
-    # if err:
-    #     return err
     login = request.json['login']
     password = request.json['password'].encode('ascii')
     with driver.session() as session:
@@ -393,16 +390,36 @@ def add_publishing_house(tx, data):
     result = tx.run(query, name=data["name"]).data()
     return result[0]
 
-@app.route('/publishing_house', methods=[ 'POST'])
-def add_publishing_house_route():
-    needed_values=["login","password", "name"]
+def initiate_request(needed_values, request, f):
     err = initiate_request_error_message(request, needed_values)
     if err:
         return err
     data = {x:request.json[x] for x in needed_values if x!="password"}
     data["password"] = request.json['password'].encode('ascii')
     with driver.session() as session:
-        return session.execute_write(add_publishing_house, data)
+        return session.execute_write(f, data)
+
+def initiate_request_with_id(needed_values, request, f, id):
+    err = initiate_request_error_message(request, needed_values)
+    if err:
+        return err
+    data = {x:request.json[x] for x in needed_values if x!="password"}
+    data["password"] = request.json['password'].encode('ascii')
+    with driver.session() as session:
+        return session.execute_write(f, data, id)
+
+
+@app.route('/publishing_house', methods=[ 'POST'])
+def add_publishing_house_route():
+    needed_values=["login","password", "name"]
+    return initiate_request(needed_values, request, add_publishing_house)
+    # err = initiate_request_error_message(request, needed_values)
+    # if err:
+    #     return err
+    # data = {x:request.json[x] for x in needed_values if x!="password"}
+    # data["password"] = request.json['password'].encode('ascii')
+    # with driver.session() as session:
+    #     return session.execute_write(add_publishing_house, data)
 
 def get_publishing_house(tx, id):
     query = "MATCH (p:Publishing_House) WHERE ID(p)=$id RETURN p{.*, id:ID(p)} as `publishing house`"
@@ -437,13 +454,14 @@ def edit_publishing_house(tx, data, id):
 @app.route('/publishing_house/<int:id>', methods=['PUT'])
 def edit_publishing_house_route(id):
     needed_values=["login","password", "name"]
-    err = initiate_request_error_message(request, needed_values)
-    if err:
-        return err
-    data = {x:request.json[x] for x in needed_values if x!="password"}
-    data["password"] = request.json['password'].encode('ascii')
-    with driver.session() as session:
-        return session.execute_write(edit_publishing_house, data, id)
+    return initiate_request_with_id(needed_values, request, edit_publishing_house, id)
+    # err = initiate_request_error_message(request, needed_values)
+    # if err:
+    #     return err
+    # data = {x:request.json[x] for x in needed_values if x!="password"}
+    # data["password"] = request.json['password'].encode('ascii')
+    # with driver.session() as session:
+    #     return session.execute_write(edit_publishing_house, data, id)
 
 def delete_publishing_house(tx, data, id):
     err = check_admin_credentials(tx, data["login"], data["password"])
@@ -637,11 +655,8 @@ def add_book_publishing_house(tx, data, id):
     if err:
         return err
     err = check_if_publishing_house_exists(tx, data["publishing_house_id"])
-    """
-    MATCH (p:Publishing_House) WHERE ID(p) = $ph_id WITH a, p
-    CREATE (b:Book {title: $title, cover_photo: $cover_photo, genres:$genres, description:$description, number:$number})
-    CREATE (a)<-[:WRITTEN_BY]-(b)-[:RELEASED_BY {release_date:date($release_date)}]->(p)
-    """
+    if err:
+        return err
     query = "MATCH (p:Publishing_House)-[:RELEASED_BY {release_date:date($release_date)}]-(b:Book) WHERE ID(p)=$publishing_house_id AND ID(b)=$id RETURN r"
     result = tx.run(query, publishing_house_id=data["publishing_house_id"], id=id, release_date=data["release_date"]).data()
     if result:
@@ -672,11 +687,8 @@ def delete_book_publishing_house(tx, data, id):
     if err:
         return err
     err = check_if_publishing_house_exists(tx, data["publishing_house_id"])
-    """
-    MATCH (p:Publishing_House) WHERE ID(p) = $ph_id WITH a, p
-    CREATE (b:Book {title: $title, cover_photo: $cover_photo, genres:$genres, description:$description, number:$number})
-    CREATE (a)<-[:WRITTEN_BY]-(b)-[:RELEASED_BY {release_date:date($release_date)}]->(p)
-    """
+    if err:
+        return err
     query = "MATCH (p:Publishing_House)-[:RELEASED_BY {release_date:date($release_date)}]-(b:Book) WHERE ID(p)=$publishing_house_id AND ID(b)=$id RETURN r"
     result = tx.run(query, publishing_house_id=data["publishing_house_id"], id=id, release_date=data["release_date"]).data()
     if not result:
