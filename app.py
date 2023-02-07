@@ -680,23 +680,34 @@ def make_reservation(tx, data, id):
     err = check_if_book_exists(id)
     if err:
         return err
-    #check if no other *active* reservations on the same book
+    #check if no other *active* reservations on the same book from the same user
     query = "" # add reservation
     result = tx.run(query, login=data["login"], id=id).data()
-    response = {'message': "Book reservation process initialized. Accept to proceed"}
+    response = {'message': "Book reservation process initialized. Confirm to proceed"}
     return jsonify(response), 200
-    
-
 
 @app.route('/book/<int:id>/reserve', methods=['POST'])
 def make_reservation_route(id):
     needed_values=["login","password"]
     return initiate_request_with_id(needed_values, request, make_reservation, id)
 
+def get_reservation_history(tx, data, id):
+    err = check_credentials(tx, data["login"], data["password"])
+    if err:
+        return err
+    query = ""
+    if data["active"]:
+        query = "" # get all active reservations from user sorted by date
+    else:
+        query = "" # get all reservations from user sorted by date
+    result = tx.run(query, id=id).data()
+    response = {'message': "Book reservation process initialized. Confirm to proceed"}
+    return jsonify(response), 200
+
 
 @app.route('/user/<int:id>/reservation_history', methods=['GET'])
 def get_reservation_history_route(id):
-    needed_values=["login","password"]
+    needed_values=["login","password", "active"]
     err = initiate_request_error_message(request, needed_values)
     if err:
         return err
@@ -715,7 +726,7 @@ def cancel_reservation_user_route(id, reservation_id):
     data = {x:request.json[x] for x in needed_values if x!="password"}
     data["password"] = request.json['password'].encode('ascii')
     with driver.session() as session:
-        return session.execute_write(cancel_reservation_user, data, id)
+        return session.execute_write(cancel_reservation_user, data, id, reservation_id)
     
 @app.route('/reservation/<int:reservation_id>/cancel', methods=['DELETE'])
 def cancel_reservation_admin_route(reservation_id):
@@ -726,7 +737,18 @@ def cancel_reservation_admin_route(reservation_id):
     data = {x:request.json[x] for x in needed_values if x!="password"}
     data["password"] = request.json['password'].encode('ascii')
     with driver.session() as session:
-        return session.execute_write(cancel_reservation_admin, data, id)
+        return session.execute_write(cancel_reservation_admin, data, reservation_id)
+    
+@app.route('/user/<int:id>/reservation/<int:reservation_id>/confirm', methods=['PUT'])
+def confirm_reservation_route(id, reservation_id):
+    needed_values=["login","password"]
+    err = initiate_request_error_message(request, needed_values)
+    if err:
+        return err
+    data = {x:request.json[x] for x in needed_values if x!="password"}
+    data["password"] = request.json['password'].encode('ascii')
+    with driver.session() as session:
+        return session.execute_write(confirm_reservation, data, id, reservation_id)
     
 
 
