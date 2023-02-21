@@ -16,4 +16,4 @@ Copy data from `Books.cypher` file info neo4j browser at `http://localhost:7474/
 
 ### starting server
 1. Install requirements by `pip install -r requirements.txt` command.
-2. Start server using `$python app.py` command
+2. Start server using `python app.py` command
